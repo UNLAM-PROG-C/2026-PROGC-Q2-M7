@@ -1,0 +1,14 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/java:25-bookworm",
+  "runArgs": ["--name", "progc-q2-m7_devcontainer"],
+  "postCreateCommand": "scripts/health-check.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "EditorConfig.EditorConfig",
+        "vscjava.vscode-java-pack",
+        "docker.docker"
+      ]
+    }
+  }
+}
