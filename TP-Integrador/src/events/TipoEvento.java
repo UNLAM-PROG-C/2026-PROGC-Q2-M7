@@ -1,0 +1,11 @@
+package events;
+
+public enum TipoEvento {
+	MOVIMIENTO,
+
+	CONEXION_ESTABLECIDA,
+	CONEXION_PERDIDA,
+
+	RIVAL_COMPLETO_GRILLA,
+	LIMPIAR_TOMATE
+}
