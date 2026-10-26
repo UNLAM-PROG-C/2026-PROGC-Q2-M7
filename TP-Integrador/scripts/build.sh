@@ -19,7 +19,7 @@ while IFS= read -r -d '' source; do
 	sources+=("$source")
 done < <(find src -name '*.java' -print0)
 
-javac --release 25 -encoding UTF-8 -Xlint:all -d build/classes "${sources[@]}"
+javac --release 17 -encoding UTF-8 -Xlint:all -d build/classes "${sources[@]}"
 jar --create --file build/app.jar --main-class Main -C build/classes .
 
 printf '\e[32m- Build completed successfully.\e[0m\n'
