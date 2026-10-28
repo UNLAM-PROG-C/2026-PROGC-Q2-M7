@@ -18,15 +18,16 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import javax.imageio.ImageIO;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
+import javax.swing.AbstractButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JSpinner;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import zip.dominio.Celda;
+import zip.dominio.Dificultad;
 import zip.dominio.Direccion;
 import zip.dominio.Nivel;
 import zip.infraestructura.SesionJuegoLocal;
@@ -40,69 +41,165 @@ public final class PruebaInterfaz {
 	}
 
 	public static void main(String[] argumentos) throws Exception {
-		verificar(!GraphicsEnvironment.isHeadless(), "Las pruebas de UI requieren un escritorio; no se omiten");
+		verificar(!GraphicsEnvironment.isHeadless(),
+				"Las pruebas de interfaz requieren escritorio y no se omiten silenciosamente.");
 		esperarExcepcion(IllegalStateException.class, () -> new VentanaJuego(escucha -> {
-			throw new AssertionError("La fábrica no debe invocarse fuera del EDT");
+			throw new AssertionError("La fábrica no debe invocarse fuera del EDT.");
 		}));
-		jugar(Controles.FLECHAS);
-		jugar(Controles.WASD);
+		navegacionMenu();
+		jugar(Controles.FLECHAS, Dificultad.FACIL);
+		jugar(Controles.WASD, Dificultad.MEDIA);
+		jugar(Controles.FLECHAS, Dificultad.DIFICIL);
 		esperarHasta(PruebaInterfaz::sinTrabajadores);
-		System.out.println(
-				"PruebaInterfaz: controles, movimientos inválidos, deshacer, reiniciar, victoria y cierre correctos");
+		System.out.println("PruebaInterfaz: menú, próximamente, 3 dificultades, "
+				+ "ambos controles y cierre superados.");
 	}
 
-	private static Nivel nivel(int puntos) {
-		verificar(puntos == Nivel.PUNTOS_MINIMOS, "La UI debe enviar la cantidad de puntos elegida");
-		List<Integer> numeros = new ArrayList<>(Collections.nCopies(Nivel.CANTIDAD_CELDAS, 0));
-		numeros.set(0, 1);
-		numeros.set(Nivel.CANTIDAD_CELDAS - Nivel.TAMANO, 2);
-		return new Nivel(numeros);
+	private static Nivel nivel(Dificultad dificultad) {
+		List<Celda> recorrido = serpiente(dificultad.tamano());
+		List<Integer> numeros = new ArrayList<>(Collections.nCopies(dificultad.cantidadCeldas(), 0));
+		for (int punto = 0; punto < dificultad.puntos(); punto++) {
+			int indice = punto * (dificultad.cantidadCeldas() - 1) / (dificultad.puntos() - 1);
+			Celda celda = recorrido.get(indice);
+			numeros.set(celda.fila() * dificultad.tamano() + celda.columna(), punto + 1);
+		}
+		return new Nivel(dificultad.tamano(), numeros);
+	}
+
+	private static List<Celda> serpiente(int tamano) {
+		List<Celda> recorrido = new ArrayList<>();
+		for (int fila = 0; fila < tamano; fila++) {
+			for (int desplazamiento = 0; desplazamiento < tamano; desplazamiento++) {
+				int columna = fila % 2 == 0 ? desplazamiento : tamano - 1 - desplazamiento;
+				recorrido.add(new Celda(fila, columna));
+			}
+		}
+		return recorrido;
 	}
 
 	private static Escenario abrir() throws Exception {
 		return enEdt(() -> {
-			VentanaJuego ventana = new VentanaJuego(escucha -> new SesionJuegoLocal(
-					PruebaInterfaz::nivel, escucha, SwingUtilities::invokeLater));
+			AtomicInteger sesiones = new AtomicInteger();
+			VentanaJuego ventana = new VentanaJuego(escucha -> {
+				sesiones.incrementAndGet();
+				return new SesionJuegoLocal(PruebaInterfaz::nivel, escucha, SwingUtilities::invokeLater);
+			});
 			ventana.mostrar();
-			verificar(ventana.ventana().isShowing(), "La ventana Swing real está visible");
-			return new Escenario(ventana);
+			verificar(ventana.ventana().isShowing(), "La ventana Swing real está visible.");
+			return new Escenario(ventana, sesiones);
 		});
 	}
 
-	private static void jugar(Controles controles) throws Exception {
+	private static void navegacionMenu() throws Exception {
 		try (Escenario escenario = abrir()) {
-			iniciar(escenario, controles);
-			verificarEntrada(escenario, controles);
-			capturar(escenario, "build/ui-jugando.png");
-			completar(escenario, controles);
-			capturar(escenario, "build/ui-victoria.png");
-			reiniciarYVolver(escenario);
+			verificarPredeterminados(escenario);
+			capturar(escenario, "build/ui-menu.png");
+			activar(escenario, "dificultad-dificil");
+			esperarTexto(escenario, "resumen-seleccion", "Difícil 8×8");
+			activar(escenario, "controles-flechas", KeyEvent.VK_ENTER);
+			esperarTexto(escenario, "resumen-seleccion", "Flechas");
+			enEdt(() -> { escenario.hacerClic("controles-wasd"); return null; });
+			esperarTexto(escenario, "resumen-seleccion", "W A S D");
+			visitarProximamente(escenario);
+			verificar(escenario.sesiones().get() == 0,
+					"Próximamente no debe crear una sesión de juego.");
 		}
 	}
 
-	private static void iniciar(Escenario escenario, Controles controles) throws Exception {
+	private static void verificarPredeterminados(Escenario escenario) throws Exception {
 		enEdt(() -> {
-			((JComboBox<?>) escenario.buscar("controles")).setSelectedItem(controles);
-			JSpinner puntos = (JSpinner) escenario.buscar("puntos");
-			puntos.setValue(Nivel.PUNTOS_MINIMOS);
+			verificar(escenario.seleccionada("modo-un-jugador"),
+					"Un jugador está seleccionado de forma predeterminada.");
+			verificar(escenario.seleccionada("controles-flechas"),
+					"Flechas está seleccionado de forma predeterminada.");
+			verificar(escenario.seleccionada("dificultad-media"),
+					"Media está seleccionada de forma predeterminada.");
+			verificar(escenario.texto("resumen-seleccion").contains("Flechas · Media 6×6"),
+					"El resumen predeterminado es correcto.");
+			verificarTeclasVisuales(escenario.ventana().ventana().getRootPane());
+			return null;
+		});
+	}
+
+	private static void verificarTeclasVisuales(Container contenedor) {
+		for (Component hijo : contenedor.getComponents()) {
+			if (hijo instanceof TeclaVisual tecla) {
+				verificarTeclaVisual(tecla);
+			}
+			if (hijo instanceof Container descendiente) {
+				verificarTeclasVisuales(descendiente);
+			}
+		}
+	}
+
+	private static void verificarTeclaVisual(TeclaVisual tecla) {
+		TarjetaControles tarjeta = (TarjetaControles) SwingUtilities.getAncestorOfClass(TarjetaControles.class, tecla);
+		java.awt.Rectangle limites = SwingUtilities.convertRectangle(
+				tecla.getParent(), tecla.getBounds(), tarjeta);
+		int inferiorCuerpo = tarjeta.getHeight() - Tema.MARGEN_CONTROL - Tema.HALO_TARJETA;
+		verificar(tecla.getHeight() >= tecla.getPreferredSize().height,
+				"La tecla visual conserva su altura preferida.");
+		verificar(limites.y + limites.height <= inferiorCuerpo,
+				"La tecla visual queda dentro del borde de la tarjeta.");
+	}
+
+	private static void visitarProximamente(Escenario escenario) throws Exception {
+		enEdt(() -> { escenario.hacerClic("modo-multijugador"); return null; });
+		esperarHasta(() -> escenario.visible("proximamente"));
+		capturar(escenario, "build/ui-proximamente.png");
+		enEdt(() -> { escenario.hacerClic("proximamente-volver"); return null; });
+		esperarHasta(() -> escenario.visible("iniciar"));
+		verificar(escenario.seleccionada("modo-un-jugador"),
+				"Volver restaura el modo anterior.");
+		activar(escenario, "modo-multijugador");
+		esperarHasta(() -> escenario.visible("proximamente"));
+		enEdt(() -> { escenario.hacerClic("jugar-solo"); return null; });
+		esperarHasta(() -> escenario.visible("iniciar"));
+		verificar(escenario.seleccionada("modo-un-jugador"),
+				"Jugar en solitario selecciona un jugador.");
+	}
+
+	private static void jugar(Controles controles, Dificultad dificultad) throws Exception {
+		try (Escenario escenario = abrir()) {
+			iniciar(escenario, controles, dificultad);
+			verificarEntrada(escenario, controles, dificultad.cantidadCeldas());
+			if (dificultad == Dificultad.DIFICIL) {
+				capturar(escenario, "build/ui-jugando.png");
+			}
+			completar(escenario, controles, dificultad);
+			if (dificultad == Dificultad.DIFICIL) {
+				capturar(escenario, "build/ui-victoria.png");
+			}
+			reiniciarYVolver(escenario, dificultad.cantidadCeldas());
+		}
+	}
+
+	private static void iniciar(Escenario escenario, Controles controles,
+			Dificultad dificultad) throws Exception {
+		enEdt(() -> {
+			escenario.hacerClic(controles == Controles.FLECHAS
+					? "controles-flechas" : "controles-wasd");
+			escenario.hacerClic("dificultad-"
+					+ dificultad.name().toLowerCase(java.util.Locale.ROOT));
 			escenario.hacerClic("iniciar");
 			return null;
 		});
-		esperarCantidad(escenario, 1);
+		esperarCantidad(escenario, 1, dificultad.cantidadCeldas());
 		esperarHasta(() -> escenario.ventana().ventana().getFocusOwner() != null);
 	}
 
-	private static void verificarEntrada(Escenario escenario, Controles controles) throws Exception {
-		presionar(escenario, controles.tecla(Direccion.ARRIBA));
-		esperarTexto(escenario, "estadoMensaje", "tablero");
-		presionar(escenario, controles.tecla(Direccion.DERECHA));
-		esperarCantidad(escenario, 2);
-		presionar(escenario, KeyEvent.VK_BACK_SPACE);
-		esperarCantidad(escenario, 1);
-		presionar(escenario, controles.tecla(Direccion.DERECHA));
-		esperarCantidad(escenario, 2);
+	private static void verificarEntrada(Escenario escenario, Controles controles,
+			int cantidadCeldas) throws Exception {
+		pulsar(escenario, controles.tecla(Direccion.ARRIBA));
+		esperarTexto(escenario, "estado-mensaje", "tablero");
+		pulsar(escenario, controles.tecla(Direccion.DERECHA));
+		esperarCantidad(escenario, 2, cantidadCeldas);
+		pulsar(escenario, KeyEvent.VK_BACK_SPACE);
+		esperarCantidad(escenario, 1, cantidadCeldas);
+		pulsar(escenario, controles.tecla(Direccion.DERECHA));
+		esperarCantidad(escenario, 2, cantidadCeldas);
 		enEdt(() -> { escenario.hacerClic("reiniciar"); return null; });
-		esperarCantidad(escenario, 1);
+		esperarCantidad(escenario, 1, cantidadCeldas);
 		verificarTeclasInactivas(escenario, controles);
 	}
 
@@ -111,60 +208,100 @@ public final class PruebaInterfaz {
 			JComponent panel = (JComponent) escenario.buscar("juego");
 			int inactiva = controles == Controles.FLECHAS ? KeyEvent.VK_W : KeyEvent.VK_UP;
 			verificar(panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
-					.get(KeyStroke.getKeyStroke(inactiva, 0)) == null, "Los controles inactivos se eliminan");
-			((JButton) escenario.buscar("reiniciar")).requestFocusInWindow();
+					.get(KeyStroke.getKeyStroke(inactiva, 0)) == null,
+					"Los controles inactivos se eliminan.");
+			escenario.buscar("reiniciar").requestFocusInWindow();
 			return null;
 		});
 	}
 
-	private static void completar(Escenario escenario, Controles controles) throws Exception {
+	private static void completar(Escenario escenario, Controles controles,
+			Dificultad dificultad) throws Exception {
 		int visitadas = 1;
-		for (int fila = 0; fila < Nivel.TAMANO; fila++) {
+		for (int fila = 0; fila < dificultad.tamano(); fila++) {
 			Direccion direccion = fila % 2 == 0 ? Direccion.DERECHA : Direccion.IZQUIERDA;
-			for (int columna = 1; columna < Nivel.TAMANO; columna++) {
-				presionar(escenario, controles.tecla(direccion));
-				esperarCantidad(escenario, ++visitadas);
+			for (int columna = 1; columna < dificultad.tamano(); columna++) {
+				pulsar(escenario, controles.tecla(direccion));
+				esperarCantidad(escenario, ++visitadas, dificultad.cantidadCeldas());
 			}
-			if (fila < Nivel.TAMANO - 1) {
-				presionar(escenario, controles.tecla(Direccion.ABAJO));
-				esperarCantidad(escenario, ++visitadas);
+			if (fila < dificultad.tamano() - 1) {
+				pulsar(escenario, controles.tecla(Direccion.ABAJO));
+				esperarCantidad(escenario, ++visitadas, dificultad.cantidadCeldas());
 			}
 		}
-		esperarTexto(escenario, "victoria", "100%");
+		esperarVictoria(escenario);
 	}
 
-	private static void reiniciarYVolver(Escenario escenario) throws Exception {
+	private static void esperarVictoria(Escenario escenario) throws Exception {
+		esperarTexto(escenario, "victoria", "¡Completado!");
+		esperarHasta(() -> escenario.visible("superposicion-victoria"));
+		esperarHasta(() -> focoNombrado(escenario, "jugar-de-nuevo"));
+	}
+
+	private static boolean focoNombrado(Escenario escenario, String nombre) {
+		Component foco = escenario.ventana().ventana().getFocusOwner();
+		return foco != null && nombre.equals(foco.getName());
+	}
+
+	private static void reiniciarYVolver(Escenario escenario, int cantidadCeldas) throws Exception {
 		enEdt(() -> {
-			verificar(!escenario.buscar("deshacer").isEnabled(), "Deshacer queda deshabilitado tras la victoria");
-			escenario.hacerClic("reiniciar");
+			verificar(!escenario.buscar("deshacer").isEnabled(),
+					"Deshacer queda deshabilitado después de la victoria.");
+			escenario.hacerClic("jugar-de-nuevo");
 			return null;
 		});
-		esperarCantidad(escenario, 1);
+		esperarCantidad(escenario, 1, cantidadCeldas);
 		enEdt(() -> { escenario.hacerClic("volver"); return null; });
 		esperarHasta(() -> escenario.visible("iniciar"));
 	}
 
-	private static void presionar(Escenario escenario, int tecla) throws Exception {
+	private static void activar(Escenario escenario, String nombre) throws Exception {
+		activar(escenario, nombre, KeyEvent.VK_SPACE);
+	}
+
+	private static void activar(Escenario escenario, String nombre, int tecla) throws Exception {
+		enEdt(() -> {
+			escenario.ventana().ventana().toFront();
+			escenario.buscar(nombre).requestFocusInWindow();
+			return null;
+		});
+		esperarHasta(() -> solicitarFoco(escenario, nombre));
+		enviarTecla(escenario, tecla, KeyEvent.KEY_PRESSED);
+		enviarTecla(escenario, tecla, KeyEvent.KEY_RELEASED);
+	}
+
+	private static boolean solicitarFoco(Escenario escenario, String nombre) {
+		Component destino = escenario.buscar(nombre);
+		if (escenario.ventana().ventana().getFocusOwner() == destino) {
+			return true;
+		}
+		destino.requestFocusInWindow();
+		return false;
+	}
+
+	private static void pulsar(Escenario escenario, int tecla) throws Exception {
 		enEdt(() -> {
 			JComponent panel = (JComponent) escenario.buscar("juego");
-			Object vinculo = panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+			Object vinculacion = panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
 					.get(KeyStroke.getKeyStroke(tecla, 0));
-			verificar(vinculo != null, "La tecla debe tener un vínculo activo a nivel de ventana");
-			enviarTecla(escenario, tecla);
+			verificar(vinculacion != null,
+					"La tecla debe tener una vinculación activa en la ventana.");
+			enviarTecla(escenario, tecla, KeyEvent.KEY_PRESSED);
 			return null;
 		});
 	}
 
-	private static void enviarTecla(Escenario escenario, int tecla) {
-		KeyboardFocusManager focus = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+	private static void enviarTecla(Escenario escenario, int tecla, int identificador) {
+		KeyboardFocusManager administradorFoco =
+				KeyboardFocusManager.getCurrentKeyboardFocusManager();
 		Component destino = escenario.ventana().ventana().getFocusOwner();
-		verificar(destino != null, "La ventana de prueba debe tener el foco del teclado");
-		focus.redispatchEvent(destino, new KeyEvent(destino, KeyEvent.KEY_PRESSED,
+		verificar(destino != null, "La ventana de prueba debe tener el foco del teclado.");
+		administradorFoco.redispatchEvent(destino, new KeyEvent(destino, identificador,
 				System.currentTimeMillis(), 0, tecla, KeyEvent.CHAR_UNDEFINED));
 	}
 
-	private static void esperarCantidad(Escenario escenario, int cantidad) throws Exception {
-		String esperado = "Celdas recorridas: " + cantidad + "/" + Nivel.CANTIDAD_CELDAS;
+	private static void esperarCantidad(Escenario escenario, int cantidad, int cantidadCeldas) throws Exception {
+		String esperado = cantidad + "/" + cantidadCeldas;
 		esperarHasta(() -> escenario.texto("progreso").equals(esperado));
 	}
 
@@ -175,14 +312,16 @@ public final class PruebaInterfaz {
 	private static void esperarHasta(BooleanSupplier condicion) throws Exception {
 		long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(SEGUNDOS_ESPERA);
 		while (!enEdt(condicion::getAsBoolean)) {
-			verificar(System.nanoTime() < limite, "Se agotó la espera del estado de la UI o del trabajador");
+			verificar(System.nanoTime() < limite,
+					"Se agotó la espera del estado de la interfaz o del trabajador.");
 			Thread.sleep(MILISEGUNDOS_CONSULTA);
 		}
 	}
 
 	private static void capturar(Escenario escenario, String recorrido) throws Exception {
-		BufferedImage imagen = enEdt(() -> renderizar(escenario.ventana().ventana().getContentPane()));
-		verificar(ImageIO.write(imagen, "png", Path.of(recorrido).toFile()), "El escritor PNG está disponible");
+		BufferedImage imagen = enEdt(() -> renderizar(escenario.ventana().ventana().getRootPane()));
+		verificar(ImageIO.write(imagen, "png", Path.of(recorrido).toFile()),
+				"El escritor de PNG está disponible.");
 	}
 
 	private static BufferedImage renderizar(Container contenido) {
@@ -217,7 +356,7 @@ public final class PruebaInterfaz {
 				return buscar(descendiente, nombre);
 			}
 		}
-		throw new AssertionError("Falta el componente de UI: " + nombre);
+		throw new AssertionError("Falta el componente de interfaz: " + nombre);
 	}
 
 	private static boolean contiene(Container contenedor, String nombre) {
@@ -230,13 +369,24 @@ public final class PruebaInterfaz {
 		return false;
 	}
 
-	private record Escenario(VentanaJuego ventana) implements AutoCloseable {
+	private record Escenario(VentanaJuego ventana, AtomicInteger sesiones) implements AutoCloseable {
 		Component buscar(String nombre) {
-			return PruebaInterfaz.buscar(ventana.ventana().getContentPane(), nombre);
+			return PruebaInterfaz.buscar(ventana.ventana().getRootPane(), nombre);
 		}
 
 		void hacerClic(String nombre) {
-			((JButton) buscar(nombre)).doClick(DEMORA_CERO);
+			Component componente = buscar(nombre);
+			if (componente instanceof AbstractButton boton) {
+				boton.doClick(DEMORA_CERO);
+			} else {
+				((ControlAccion) componente).hacerClic();
+			}
+		}
+
+		boolean seleccionada(String nombre) {
+			Component componente = buscar(nombre);
+			return componente instanceof AbstractButton boton
+					? boton.isSelected() : ((TarjetaSeleccionable) componente).estaSeleccionada();
 		}
 
 		String texto(String nombre) {
@@ -252,11 +402,12 @@ public final class PruebaInterfaz {
 			try {
 				enEdt(() -> {
 					ventana.ventana().dispatchEvent(new WindowEvent(ventana.ventana(), WindowEvent.WINDOW_CLOSING));
-					verificar(!ventana.ventana().isDisplayable(), "La ventana debe liberarse al cerrar");
+					verificar(!ventana.ventana().isDisplayable(),
+							"La ventana debe liberarse al cerrar.");
 					return null;
 				});
 			} catch (Exception excepcion) {
-				throw new AssertionError("No se pudo cerrar la ventana de prueba", excepcion);
+				throw new AssertionError("No se pudo cerrar la ventana de prueba.", excepcion);
 			}
 		}
 	}

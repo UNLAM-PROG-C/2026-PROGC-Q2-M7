@@ -22,7 +22,7 @@ public final class MotorJuego {
 
 	public ResultadoMovimiento mover(Direccion direccion) {
 		Objects.requireNonNull(direccion, DIRECCION_NULA);
-		if (recorrido.size() == Nivel.CANTIDAD_CELDAS) {
+		if (recorrido.size() == nivel.cantidadCeldas()) {
 			return ResultadoMovimiento.FINALIZADO;
 		}
 		Celda siguiente = recorrido.get(recorrido.size() - 1).mover(direccion);
@@ -34,7 +34,7 @@ public final class MotorJuego {
 	}
 
 	public boolean deshacer() {
-		if (recorrido.size() == 1 || recorrido.size() == Nivel.CANTIDAD_CELDAS) {
+		if (recorrido.size() == 1 || recorrido.size() == nivel.cantidadCeldas()) {
 			return false;
 		}
 		recorrido.remove(recorrido.size() - 1);

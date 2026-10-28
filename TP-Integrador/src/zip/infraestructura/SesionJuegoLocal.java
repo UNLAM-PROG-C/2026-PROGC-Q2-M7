@@ -8,12 +8,13 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.function.IntFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import zip.aplicacion.SesionJuego;
 import zip.aplicacion.ActualizacionSesion;
 import zip.dominio.Direccion;
+import zip.dominio.Dificultad;
 import zip.dominio.MotorJuego;
 import zip.dominio.Nivel;
 
@@ -22,17 +23,17 @@ public final class SesionJuegoLocal implements SesionJuego {
 	private static final int CAPACIDAD_COLA = 64;
 	private final ThreadPoolExecutor trabajador;
 	private final AtomicBoolean cerrada = new AtomicBoolean();
-	private final IntFunction<Nivel> niveles;
+	private final Function<Dificultad, Nivel> niveles;
 	private final Consumer<ActualizacionSesion> escucha;
 	private final Consumer<Runnable> despachador;
 	private Optional<MotorJuego> motor = Optional.empty();
 
-	public SesionJuegoLocal(IntFunction<Nivel> niveles, Consumer<ActualizacionSesion> escucha,
+	public SesionJuegoLocal(Function<Dificultad, Nivel> niveles, Consumer<ActualizacionSesion> escucha,
 			Consumer<Runnable> despachador) {
 		this(niveles, escucha, despachador, CAPACIDAD_COLA);
 	}
 
-	SesionJuegoLocal(IntFunction<Nivel> niveles, Consumer<ActualizacionSesion> escucha,
+	SesionJuegoLocal(Function<Dificultad, Nivel> niveles, Consumer<ActualizacionSesion> escucha,
 			Consumer<Runnable> despachador, int capacidad) {
 		this.niveles = Objects.requireNonNull(niveles, "niveles");
 		this.escucha = Objects.requireNonNull(escucha, "escucha");
@@ -43,9 +44,10 @@ public final class SesionJuegoLocal implements SesionJuego {
 	}
 
 	@Override
-	public boolean iniciar(int puntos) {
+	public boolean iniciar(Dificultad dificultad) {
+		Objects.requireNonNull(dificultad, "dificultad");
 		return enviar(() -> {
-			motor = Optional.of(new MotorJuego(niveles.apply(puntos)));
+			motor = Optional.of(new MotorJuego(niveles.apply(dificultad)));
 			return "Conectá los números en orden y recorré todas las celdas.";
 		});
 	}
