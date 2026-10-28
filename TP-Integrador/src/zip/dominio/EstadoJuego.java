@@ -25,7 +25,7 @@ public record EstadoJuego(Nivel nivel, List<Celda> recorrido) {
 	}
 
 	public boolean gano() {
-		return visitadas() == Nivel.CANTIDAD_CELDAS && proximoNumero() == nivel.puntos() + 1;
+		return visitadas() == nivel.cantidadCeldas() && proximoNumero() == nivel.puntos() + 1;
 	}
 
 	public int visitadas() {

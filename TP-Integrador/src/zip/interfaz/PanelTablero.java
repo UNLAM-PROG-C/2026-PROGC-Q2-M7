@@ -3,11 +3,10 @@ package zip.interfaz;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.geom.Ellipse2D;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -15,24 +14,16 @@ import java.util.Set;
 import javax.swing.JPanel;
 import zip.dominio.Celda;
 import zip.dominio.EstadoJuego;
-import zip.dominio.Nivel;
 
 final class PanelTablero extends JPanel {
 	private static final long serialVersionUID = 1L;
-	private static final int TAMANO_TABLERO = 480;
-	private static final int RELLENO = 12;
-	private static final int SEPARACION = 5;
-	private static final int RADIO_ESQUINA = 14;
-	private static final int DIVISOR_NODO = 3;
-	private static final int DIVISOR_FUENTE = 4;
-	private static final float PROPORCION_RECORRIDO = 0.13f;
-	private static final float GROSOR_ANILLO = 3.0f;
 	private transient Optional<EstadoJuego> estado = Optional.empty();
 
 	PanelTablero() {
 		setName("tablero");
-		setBackground(Estilo.FONDO);
-		setPreferredSize(new Dimension(TAMANO_TABLERO, TAMANO_TABLERO));
+		setBackground(Tema.FONDO);
+		setPreferredSize(new Dimension(Tema.TAMANO_PREFERIDO_TABLERO,
+				Tema.TAMANO_PREFERIDO_TABLERO));
 	}
 
 	void mostrar(EstadoJuego estado) {
@@ -43,14 +34,15 @@ final class PanelTablero extends JPanel {
 	@Override
 	protected void paintComponent(Graphics graficos) {
 		super.paintComponent(graficos);
-		if (estado.isPresent()) {
-			Graphics2D dibujo = (Graphics2D) graficos.create();
-			try {
-				dibujo.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-				dibujarTablero(dibujo, geometry());
-			} finally {
-				dibujo.dispose();
-			}
+		if (estado.isEmpty()) {
+			return;
+		}
+		Graphics2D dibujo = (Graphics2D) graficos.create();
+		try {
+			Tema.preparar(dibujo);
+			dibujarTablero(dibujo, geometria());
+		} finally {
+			dibujo.dispose();
 		}
 	}
 
@@ -58,92 +50,140 @@ final class PanelTablero extends JPanel {
 		return estado.orElseThrow();
 	}
 
-	private Geometria geometry() {
-		int tamano = Math.max(1, (Math.min(getWidth(), getHeight()) - 2 * RELLENO) / Nivel.TAMANO);
-		return new Geometria(tamano, (getWidth() - tamano * Nivel.TAMANO) / 2,
-				(getHeight() - tamano * Nivel.TAMANO) / 2);
+	private Geometria geometria() {
+		int ladoTablero = Math.min(getWidth(), getHeight());
+		int izquierdaTablero = (getWidth() - ladoTablero) / 2;
+		int superiorTablero = (getHeight() - ladoTablero) / 2;
+		int tamanoNivel = estadoJuego().nivel().tamano();
+		int espacioGrilla = ladoTablero - 2 * Tema.RELLENO_TABLERO;
+		int celda = (espacioGrilla - (tamanoNivel - 1) * Tema.SEPARACION_CELDAS) / tamanoNivel;
+		int ladoGrilla = celda * tamanoNivel + (tamanoNivel - 1) * Tema.SEPARACION_CELDAS;
+		int izquierdaGrilla = izquierdaTablero + (ladoTablero - ladoGrilla) / 2;
+		int superiorGrilla = superiorTablero + (ladoTablero - ladoGrilla) / 2;
+		return new Geometria(izquierdaTablero, superiorTablero, ladoTablero,
+				izquierdaGrilla, superiorGrilla, celda, tamanoNivel);
 	}
 
 	private void dibujarTablero(Graphics2D dibujo, Geometria grilla) {
+		dibujo.setColor(Tema.FONDO_TABLERO);
+		dibujo.fill(Tema.redondeado(grilla.izquierdaTablero(), grilla.superiorTablero(),
+				grilla.ladoTablero(), grilla.ladoTablero(), Tema.RADIO_TABLERO));
 		Set<Celda> visitadas = new HashSet<>(estadoJuego().recorrido());
-		for (int fila = 0; fila < Nivel.TAMANO; fila++) {
-			for (int columna = 0; columna < Nivel.TAMANO; columna++) {
-				dibujarCelda(dibujo, grilla, new Celda(fila, columna), visitadas);
+		dibujarCeldas(dibujo, grilla, visitadas);
+		dibujarRecorrido(dibujo, grilla);
+		dibujarActual(dibujo, grilla);
+		dibujarNumeros(dibujo, grilla);
+	}
+
+	private void dibujarCeldas(Graphics2D dibujo, Geometria grilla, Set<Celda> visitadas) {
+		for (int fila = 0; fila < grilla.tamanoNivel(); fila++) {
+			for (int columna = 0; columna < grilla.tamanoNivel(); columna++) {
+				Celda celda = new Celda(fila, columna);
+				dibujarCelda(dibujo, grilla, celda, visitadas.contains(celda));
 			}
 		}
-		dibujarRecorrido(dibujo, grilla);
-		dibujarNumeros(dibujo, grilla);
-		dibujarActual(dibujo, grilla);
 	}
 
-	private void dibujarCelda(Graphics2D dibujo, Geometria grilla, Celda celda, Set<Celda> visitadas) {
-		dibujo.setColor(colorCelda(celda, visitadas.contains(celda)));
-		dibujo.fillRoundRect(grilla.x(celda) - grilla.tamano() / 2 + SEPARACION,
-				grilla.y(celda) - grilla.tamano() / 2 + SEPARACION, grilla.tamano() - 2 * SEPARACION,
-				grilla.tamano() - 2 * SEPARACION, RADIO_ESQUINA, RADIO_ESQUINA);
-	}
-
-	private Color colorCelda(Celda celda, boolean visitadas) {
-		int numero = estadoJuego().nivel().numeroEn(celda);
-		if (numero == 1) {
-			return Estilo.INICIO;
+	private void dibujarCelda(Graphics2D dibujo, Geometria grilla, Celda celda, boolean visitadas) {
+		Color color = visitadas ? Tema.VISITADA : Tema.TARJETA;
+		if (celda.equals(estadoJuego().actual())) {
+			color = Tema.ACENTO;
 		}
-		if (numero == estadoJuego().nivel().puntos()) {
-			return Estilo.FIN;
-		}
-		return visitadas ? Estilo.VISITADA : Color.WHITE;
+		dibujo.setColor(color);
+		dibujo.fill(Tema.redondeado(grilla.x(celda), grilla.y(celda), grilla.celda(),
+				grilla.celda(), Tema.RADIO_CELDA));
 	}
 
 	private void dibujarRecorrido(Graphics2D dibujo, Geometria grilla) {
-		dibujo.setColor(Estilo.ACENTO);
-		dibujo.setStroke(new BasicStroke(grilla.tamano() * PROPORCION_RECORRIDO, BasicStroke.CAP_ROUND,
-				BasicStroke.JOIN_ROUND));
 		List<Celda> recorrido = estadoJuego().recorrido();
+		dibujo.setColor(Tema.ACENTO);
+		dibujo.setStroke(new BasicStroke(Tema.GROSOR_RECORRIDO,
+				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 		for (int indice = 1; indice < recorrido.size(); indice++) {
-			Celda anterior = recorrido.get(indice - 1);
-			Celda actual = recorrido.get(indice);
-			dibujo.drawLine(grilla.x(anterior), grilla.y(anterior), grilla.x(actual), grilla.y(actual));
+			dibujo.drawLine(grilla.centroX(recorrido.get(indice - 1)),
+					grilla.centroY(recorrido.get(indice - 1)),
+					grilla.centroX(recorrido.get(indice)), grilla.centroY(recorrido.get(indice)));
 		}
 	}
 
+	private void dibujarActual(Graphics2D dibujo, Geometria grilla) {
+		Celda actual = estadoJuego().actual();
+		int x = grilla.centroX(actual) - Tema.PUNTO_ACTUAL / 2;
+		int y = grilla.centroY(actual) - Tema.PUNTO_ACTUAL / 2;
+		dibujo.setColor(Tema.TARJETA);
+		dibujo.fillOval(x, y, Tema.PUNTO_ACTUAL, Tema.PUNTO_ACTUAL);
+	}
+
 	private void dibujarNumeros(Graphics2D dibujo, Geometria grilla) {
-		dibujo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, grilla.tamano() / DIVISOR_FUENTE));
-		for (int fila = 0; fila < Nivel.TAMANO; fila++) {
-			for (int columna = 0; columna < Nivel.TAMANO; columna++) {
+		for (int fila = 0; fila < grilla.tamanoNivel(); fila++) {
+			for (int columna = 0; columna < grilla.tamanoNivel(); columna++) {
 				Celda celda = new Celda(fila, columna);
-				if (estadoJuego().nivel().numeroEn(celda) > 0) {
-					dibujarNumero(dibujo, grilla, celda);
+				int numero = estadoJuego().nivel().numeroEn(celda);
+				if (numero > 0) {
+					dibujarNumero(dibujo, grilla, celda, numero);
 				}
 			}
 		}
 	}
 
-	private void dibujarNumero(Graphics2D dibujo, Geometria grilla, Celda celda) {
-		int diametro = grilla.tamano() / DIVISOR_NODO;
-		dibujo.setColor(Color.WHITE);
-		dibujo.fillOval(grilla.x(celda) - diametro / 2, grilla.y(celda) - diametro / 2, diametro, diametro);
-		dibujo.setColor(Estilo.TINTA);
-		String texto = Integer.toString(estadoJuego().nivel().numeroEn(celda));
+	private void dibujarNumero(Graphics2D dibujo, Geometria grilla, Celda celda, int numero) {
+		int diametro = Math.min(Tema.DIAMETRO_NUMERO,
+				grilla.celda() - 2 * Tema.GROSOR_BORDE);
+		int x = grilla.centroX(celda) - diametro / 2;
+		int y = grilla.centroY(celda) - diametro / 2;
+		if (numero < estadoJuego().proximoNumero()) {
+			rellenarNumero(dibujo, x, y, diametro, Tema.ACENTO, Tema.TARJETA);
+		} else if (numero == estadoJuego().proximoNumero()) {
+			delinearNumero(dibujo, x, y, diametro);
+		} else {
+			rellenarNumero(dibujo, x, y, diametro, Tema.TINTA, Tema.TARJETA);
+		}
+		dibujarTextoNumero(dibujo, grilla, celda, numero);
+	}
+
+	private void rellenarNumero(Graphics2D dibujo, int x, int y, int diametro,
+			Color relleno, Color texto) {
+		dibujo.setColor(relleno);
+		dibujo.fill(new Ellipse2D.Float(x, y, diametro, diametro));
+		dibujo.setColor(texto);
+	}
+
+	private void delinearNumero(Graphics2D dibujo, int x, int y, int diametro) {
+		dibujo.setColor(Tema.ACENTO);
+		dibujo.fill(new Ellipse2D.Float(x, y, diametro, diametro));
+		int margen = Tema.BORDE_NUMERO;
+		dibujo.setColor(Tema.TARJETA);
+		dibujo.fill(new Ellipse2D.Float(x + margen, y + margen,
+				diametro - 2 * margen, diametro - 2 * margen));
+		dibujo.setColor(Tema.TINTA);
+	}
+
+	private void dibujarTextoNumero(Graphics2D dibujo, Geometria grilla, Celda celda,
+			int numero) {
+		dibujo.setFont(Tema.fuente(Tema.TAMANO_NUMERO, true));
+		String texto = Integer.toString(numero);
 		FontMetrics metricas = dibujo.getFontMetrics();
-		dibujo.drawString(texto, grilla.x(celda) - metricas.stringWidth(texto) / 2,
-				grilla.y(celda) + (metricas.getAscent() - metricas.getDescent()) / 2);
+		int x = grilla.centroX(celda) - metricas.stringWidth(texto) / 2;
+		int y = grilla.centroY(celda) + (metricas.getAscent() - metricas.getDescent()) / 2;
+		dibujo.drawString(texto, x, y);
 	}
 
-	private void dibujarActual(Graphics2D dibujo, Geometria grilla) {
-		int radio = grilla.tamano() / DIVISOR_FUENTE;
-		Celda actual = estadoJuego().actual();
-		dibujo.setColor(Estilo.ACENTO);
-		dibujo.setStroke(new BasicStroke(GROSOR_ANILLO));
-		dibujo.drawOval(grilla.x(actual) - radio, grilla.y(actual) - radio, 2 * radio, 2 * radio);
-	}
-
-	private record Geometria(int tamano, int izquierda, int superior) {
-		int x(Celda celda) {
-			return izquierda + celda.columna() * tamano + tamano / 2;
+	private record Geometria(int izquierdaTablero, int superiorTablero, int ladoTablero,
+			int izquierdaGrilla, int superiorGrilla, int celda, int tamanoNivel) {
+		int x(Celda posicion) {
+			return izquierdaGrilla + posicion.columna() * (celda + Tema.SEPARACION_CELDAS);
 		}
 
-		int y(Celda celda) {
-			return superior + celda.fila() * tamano + tamano / 2;
+		int y(Celda posicion) {
+			return superiorGrilla + posicion.fila() * (celda + Tema.SEPARACION_CELDAS);
+		}
+
+		int centroX(Celda posicion) {
+			return x(posicion) + celda / 2;
+		}
+
+		int centroY(Celda posicion) {
+			return y(posicion) + celda / 2;
 		}
 	}
 }
