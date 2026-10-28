@@ -7,7 +7,7 @@ import zip.dominio.Direccion;
 public enum Controles {
 	FLECHAS("Flechas", Map.of(Direccion.ARRIBA, KeyEvent.VK_UP, Direccion.DERECHA, KeyEvent.VK_RIGHT,
 			Direccion.ABAJO, KeyEvent.VK_DOWN, Direccion.IZQUIERDA, KeyEvent.VK_LEFT)),
-	WASD("WASD", Map.of(Direccion.ARRIBA, KeyEvent.VK_W, Direccion.DERECHA, KeyEvent.VK_D,
+	WASD("W A S D", Map.of(Direccion.ARRIBA, KeyEvent.VK_W, Direccion.DERECHA, KeyEvent.VK_D,
 			Direccion.ABAJO, KeyEvent.VK_S, Direccion.IZQUIERDA, KeyEvent.VK_A));
 
 	private final String etiqueta;

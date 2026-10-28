@@ -14,9 +14,9 @@ public final class SoportePruebas {
 		try {
 			accion.run();
 		} catch (Throwable error) {
-			verificar(tipo.isInstance(error), "Se esperaba " + tipo.getSimpleName() + ", se obtuvo " + error);
+			verificar(tipo.isInstance(error), "Expected " + tipo.getSimpleName() + ", got " + error);
 			return;
 		}
-		throw new AssertionError("Se esperaba " + tipo.getSimpleName());
+		throw new AssertionError("Expected " + tipo.getSimpleName());
 	}
 }
