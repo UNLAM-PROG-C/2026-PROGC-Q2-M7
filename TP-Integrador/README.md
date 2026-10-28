@@ -52,12 +52,16 @@ This repository contains our practical work for the Concurrent Programming cours
 TP-Integrador/
 │
 ├── .devcontainer/        # DevContainer configuration files.
+│   └── devcontainer.json # DevContainer definition (tools, extensions, and settings).
 │
 ├── docs/                 # Documentation files, such as diagrams, images, and other statics.
+│   ├── statics/          # Static assets used by the documentation.
+│   │   └── billboard.png # Repository billboard image.
+│   └── arquitectura.html # Interactive architecture walkthrough.
 │
 ├── scripts/
-│   ├── build.h           # Script to build the project.
-│   ├── health-check.h    # Script to check that the necessary tools are installed.
+│   ├── build.sh          # Script to build the project.
+│   ├── health-check.sh   # Script to check that the necessary tools are installed.
 │   └── run.sh            # Script to run the project.
 │
 ├── src/
@@ -83,4 +87,3 @@ TP-Integrador/
 
 ## Additional material
 
-- TODO
