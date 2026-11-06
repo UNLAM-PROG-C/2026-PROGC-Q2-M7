@@ -17,21 +17,25 @@ public class GestorRed {
 	private final BufferedReader entrada;
 
 	public GestorRed(int rol, EventBus bus) throws IOException {
-		this.socket = obtenerSocket(rol);
+		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, bus);
+	}
+
+	public GestorRed(int rol, String host, int puerto, EventBus bus) throws IOException {
+		this.socket = obtenerSocket(rol, host, puerto);
 		this.bus = bus;
 		this.salida = new PrintWriter(socket.getOutputStream(), true);
 		this.entrada = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 	}
 
-	private Socket obtenerSocket(int rol) throws IOException {
+	private Socket obtenerSocket(int rol, String host, int puerto) throws IOException {
 		if (rol == Constantes.ROL_HOST) {
-			System.out.println("Esperando rival en puerto " + Constantes.PUERTO + "...");
-			try (ServerSocket server = new ServerSocket(Constantes.PUERTO)) {
+			System.out.println("Esperando rival en puerto " + puerto + "...");
+			try (ServerSocket server = new ServerSocket(puerto)) {
 				return server.accept();
 			}
 		}
-		System.out.println("Conectando a " + Constantes.IP_LOCAL + ":" + Constantes.PUERTO + "...");
-		return new Socket(Constantes.IP_LOCAL, Constantes.PUERTO);
+		System.out.println("Conectando a " + host + ":" + puerto + "...");
+		return new Socket(host, puerto);
 	}
 
 	public void iniciarEscucha() {
@@ -44,7 +48,10 @@ public class GestorRed {
 		try {
 			String linea;
 			while ((linea = entrada.readLine()) != null) {
-				bus.publicar(new Evento(TipoEvento.desdeTexto(linea)));
+				TipoEvento tipo = TipoEvento.desdeTexto(linea);
+				if (tipo != null) {
+					bus.publicar(new Evento(tipo));
+				}
 			}
 		} catch (IOException e) {
 			bus.publicar(new Evento(TipoEvento.CONEXION_PERDIDA));
@@ -52,12 +59,20 @@ public class GestorRed {
 	}
 
 	public void enviarEvento(TipoEvento tipo) {
-		salida.println(tipo.name());
+		if (salida != null && tipo != null) {
+			salida.println(tipo.name());
+		}
 	}
 
 	public void cerrar() throws IOException {
-		salida.close();
-		entrada.close();
-		socket.close();
+		if (salida != null) {
+			salida.close();
+		}
+		if (entrada != null) {
+			entrada.close();
+		}
+		if (socket != null && !socket.isClosed()) {
+			socket.close();
+		}
 	}
 }

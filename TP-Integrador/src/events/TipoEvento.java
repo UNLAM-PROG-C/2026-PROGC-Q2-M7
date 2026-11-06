@@ -8,7 +8,11 @@ public enum TipoEvento {
 
 	GRILLA_COMPLETA,
 	RIVAL_COMPLETO_GRILLA,
-	LIMPIAR_TOMATE;
+	LIMPIAR_TOMATE,
+
+	INICIAR,
+	DESHACER,
+	REINICIAR;
 
 	/**
 	 * Convierte un texto en un TipoEvento, devolviendo null si no es válido.
@@ -18,9 +22,12 @@ public enum TipoEvento {
 	 * @return
 	 */
 	public static TipoEvento desdeTexto(String texto) {
+		if (texto == null) {
+			return null;
+		}
 		try {
 			return valueOf(texto.trim());
-		} catch (IllegalArgumentException | NullPointerException e) {
+		} catch (IllegalArgumentException e) {
 			return null;
 		}
 	}

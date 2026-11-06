@@ -1,10 +1,12 @@
 import java.io.IOException;
 import java.util.Scanner;
+import javax.swing.SwingUtilities;
 
 import controller.MotorJuego;
 import events.EventBus;
 import events.Evento;
 import events.TipoEvento;
+import ui.VentanaJuego;
 import utils.Constantes;
 
 public final class Main {
@@ -12,6 +14,14 @@ public final class Main {
 	private Main() {}
 
 	public static void main(String[] args) throws IOException {
+		if (args.length > 0 && "--consola".equalsIgnoreCase(args[0])) {
+			ejecutarConsola();
+		} else {
+			SwingUtilities.invokeLater(() -> new VentanaJuego().mostrar());
+		}
+	}
+
+	private static void ejecutarConsola() throws IOException {
 		Scanner scanner = new Scanner(System.in);
 		System.out.print("Elegí rol (1: Host, 2: Cliente): ");
 		int rol = Integer.parseInt(scanner.nextLine().trim());
