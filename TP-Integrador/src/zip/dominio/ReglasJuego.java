@@ -49,7 +49,7 @@ final class ReglasJuego {
 			return ResultadoMovimiento.FUERA_DE_ORDEN;
 		}
 		if (numero == nivel.puntos()) {
-			return recorrido.size() == Nivel.CANTIDAD_CELDAS - 1
+			return recorrido.size() == nivel.cantidadCeldas() - 1
 					? ResultadoMovimiento.FINALIZADO : ResultadoMovimiento.FINAL_ANTICIPADO;
 		}
 		return ResultadoMovimiento.VALIDO;

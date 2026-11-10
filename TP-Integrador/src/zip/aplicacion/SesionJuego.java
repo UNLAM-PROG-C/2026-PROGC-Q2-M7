@@ -1,9 +1,10 @@
 package zip.aplicacion;
 
 import zip.dominio.Direccion;
+import zip.dominio.Dificultad;
 
 public interface SesionJuego extends AutoCloseable {
-	boolean iniciar(int puntos);
+	boolean iniciar(Dificultad dificultad);
 
 	boolean mover(Direccion direccion);
 
