@@ -12,9 +12,11 @@ import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSlider;
 import javax.swing.SwingConstants;
 import model.Dificultad;
 import model.ModoJuego;
+import utils.Constantes;
 
 final class PanelConfiguracion {
 	private static final String RESUMEN = "resumen";
@@ -23,6 +25,8 @@ final class PanelConfiguracion {
 	private final Map<ModoJuego, TarjetaModoJuego> modos = new EnumMap<>(ModoJuego.class);
 	private final Map<Controles, TarjetaControles> controles = new EnumMap<>(Controles.class);
 	private final Map<Dificultad, TarjetaDificultad> dificultades = new EnumMap<>(Dificultad.class);
+	private JSlider sliderRondas;
+	private JLabel etiquetaRondas;
 	private final JLabel resumen = etiqueta("", Tema.TAMANO_RESUMEN, false, Tema.TINTA_SUAVE);
 	private final JLabel estadoMensaje = etiqueta(" ", Tema.TAMANO_ESTADO, false, Tema.TINTA);
 	private final CardLayout tarjetasMensaje = new CardLayout();
@@ -77,8 +81,40 @@ final class PanelConfiguracion {
 		panel.add(seccion("CONTROLES", grilla(controles.values().toArray(new JComponent[0]))));
 		panel.add(Box.createVerticalStrut(Tema.SEPARACION_SECCION));
 		panel.add(seccion("DIFICULTAD", grilla(dificultades.values().toArray(new JComponent[0]))));
+		panel.add(Box.createVerticalStrut(Tema.SEPARACION_SECCION));
+		panel.add(seccion("RONDAS PARA GANAR", panelSliderRondas()));
 		panel.add(Box.createVerticalGlue());
 		panel.add(pie());
+	}
+
+	private JPanel panelSliderRondas() {
+		JPanel contenedor = new JPanel();
+		contenedor.setLayout(new BoxLayout(contenedor, BoxLayout.X_AXIS));
+		contenedor.setOpaque(false);
+		contenedor.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+		sliderRondas = new JSlider(Constantes.MIN_RONDAS, Constantes.MAX_RONDAS, Constantes.RONDAS_POR_DEFECTO);
+		sliderRondas.setOpaque(false);
+		sliderRondas.setMajorTickSpacing(1);
+		sliderRondas.setPaintTicks(true);
+		sliderRondas.setPaintLabels(true);
+		sliderRondas.setForeground(Tema.TINTA);
+		sliderRondas.setFont(Tema.fuente(Tema.TAMANO_TEXTO_AYUDA, true));
+
+		etiquetaRondas = etiqueta(sliderRondas.getValue() + " rondas", Tema.TAMANO_TEXTO_AYUDA, true, Tema.ACENTO);
+		sliderRondas.addChangeListener(e -> {
+			etiquetaRondas.setText(sliderRondas.getValue() + (sliderRondas.getValue() == 1 ? " ronda" : " rondas"));
+			actualizarSeleccion();
+		});
+
+		contenedor.add(sliderRondas);
+		contenedor.add(Box.createHorizontalStrut(Tema.SEPARACION_RESUMEN));
+		contenedor.add(etiquetaRondas);
+		return contenedor;
+	}
+
+	int rondasSeleccionadas() {
+		return sliderRondas != null ? sliderRondas.getValue() : Constantes.RONDAS_POR_DEFECTO;
 	}
 
 	private void agregarModo(GrupoSeleccion grupo, TarjetaModoJuego tarjeta) {
@@ -178,9 +214,10 @@ final class PanelConfiguracion {
 		modos.get(modoSeleccionadoActual).seleccionar(true);
 		controles.get(controlesSeleccionados).seleccionar(true);
 		dificultades.get(dificultadSeleccionada).seleccionar(true);
+		int rondas = rondasSeleccionadas();
 		resumen.setText(controlesSeleccionados + " · " + TarjetaDificultad.titulo(dificultadSeleccionada)
 				+ " " + dificultadSeleccionada.tamano() + "×" + dificultadSeleccionada.tamano()
-				+ " · sin diagonales ni celdas repetidas");
+				+ " · Al mejor de " + rondas + (rondas == 1 ? " ronda" : " rondas"));
 		tarjetasMensaje.show(mensaje, RESUMEN);
 	}
 
@@ -202,6 +239,9 @@ final class PanelConfiguracion {
 		modos.values().forEach(tarjeta -> tarjeta.setEnabled(!ocupado));
 		controles.values().forEach(tarjeta -> tarjeta.setEnabled(!ocupado));
 		dificultades.values().forEach(tarjeta -> tarjeta.setEnabled(!ocupado));
+		if (sliderRondas != null) {
+			sliderRondas.setEnabled(!ocupado);
+		}
 		jugar.cambiarTexto(ocupado ? "Preparando…" : "Jugar");
 		if (ocupado) {
 			mostrarEstado("Generando un tablero con solución.", Tema.TINTA);

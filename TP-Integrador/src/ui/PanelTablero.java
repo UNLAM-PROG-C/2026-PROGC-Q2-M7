@@ -181,22 +181,28 @@ final class PanelTablero extends JPanel {
 	private void dibujarTomate(Graphics2D dibujo, Geometria grilla) {
 		int centroX = grilla.izquierdaTablero() + grilla.ladoTablero() / 2;
 		int centroY = grilla.superiorTablero() + grilla.ladoTablero() / 2;
-		int radio = (int) (grilla.ladoTablero() * 0.40);
+		int radio = (int) (grilla.ladoTablero() * 0.44);
 
-		// Splat blobs overlay
-		dibujo.setColor(new Color(220, 38, 38, 220));
+		// Splat blobs overlay - mucho menos transparente (casi opaco para tapar números)
+		Color rojoTomate = new Color(220, 25, 25, 252);
+		Color rojoOscuro = new Color(175, 15, 15, 255);
+		dibujo.setColor(rojoTomate);
 		dibujo.fillOval(centroX - radio, centroY - radio, radio * 2, radio * 2);
 
-		// Splatter droplets
-		int rBump = (int) (radio * 0.45);
+		// Splatter droplets gruesos
+		int rBump = (int) (radio * 0.48);
 		dibujo.fillOval(centroX - radio - rBump / 3, centroY - rBump, rBump * 2, rBump * 2);
 		dibujo.fillOval(centroX + radio - rBump, centroY - rBump / 2, rBump * 2, rBump * 2);
 		dibujo.fillOval(centroX - rBump, centroY - radio - rBump / 3, rBump * 2, rBump * 2);
 		dibujo.fillOval(centroX - rBump / 2, centroY + radio - rBump, rBump * 2, rBump * 2);
 
-		int rGota = (int) (radio * 0.22);
+		int rGota = (int) (radio * 0.25);
 		dibujo.fillOval(centroX - radio - rGota * 2, centroY + radio / 2, rGota * 2, rGota * 2);
 		dibujo.fillOval(centroX + radio + rGota, centroY - radio / 2, rGota * 2, rGota * 2);
+
+		// Pulpa interna oscura densa
+		dibujo.setColor(rojoOscuro);
+		dibujo.fillOval(centroX - radio / 2, centroY - radio / 2, radio, radio);
 
 		// Tomato stem (green leaves)
 		dibujo.setColor(new Color(34, 197, 94));
@@ -215,7 +221,7 @@ final class PanelTablero extends JPanel {
 		int textY = centroY + (fm.getAscent() - fm.getDescent()) / 2;
 
 		// Text shadow
-		dibujo.setColor(new Color(0, 0, 0, 160));
+		dibujo.setColor(new Color(0, 0, 0, 220));
 		dibujo.drawString(texto, textX + 2, textY + 2);
 		// Text
 		dibujo.setColor(Color.WHITE);

@@ -18,6 +18,7 @@ import model.EstadoJuego;
 
 final class CapaVictoria extends JPanel {
 	private static final long serialVersionUID = 1L;
+	private final JLabel titulo = etiqueta("¡Completado!", Tema.TAMANO_TITULO_VICTORIA, true, "victoria");
 	private final JLabel detalle = etiqueta("", Tema.TAMANO_DETALLE_VICTORIA, false);
 	private final BotonPrincipal jugarNuevamente = new BotonPrincipal("Jugar de nuevo");
 	private final BotonSecundario menu = new BotonSecundario("Volver al menú", null);
@@ -35,10 +36,15 @@ final class CapaVictoria extends JPanel {
 		add(tarjeta());
 	}
 
-	void mostrarVictoria(EstadoJuego estadoJuego) {
-		detalle.setText(estadoJuego.visitadas() + " de " + estadoJuego.nivel().cantidadCeldas() + " celdas");
+	void mostrarFinPartida(String tituloTexto, String detalleTexto) {
+		titulo.setText(tituloTexto);
+		detalle.setText(detalleTexto);
 		setVisible(true);
 		SwingUtilities.invokeLater(jugarNuevamente::requestFocusInWindow);
+	}
+
+	void mostrarVictoria(EstadoJuego estadoJuego) {
+		mostrarFinPartida("¡Completado!", estadoJuego.visitadas() + " de " + estadoJuego.nivel().cantidadCeldas() + " celdas");
 	}
 
 	void ocultarSuperposicion() {
@@ -63,7 +69,7 @@ final class CapaVictoria extends JPanel {
 		tarjeta.setBorder(BorderFactory.createEmptyBorder(Tema.RELLENO_VICTORIA,
 				Tema.RELLENO_VICTORIA, Tema.RELLENO_VICTORIA, Tema.RELLENO_VICTORIA));
 		tarjeta.setPreferredSize(new Dimension(Tema.ANCHO_TARJETA_VICTORIA, Tema.ALTO_TARJETA_VICTORIA));
-		tarjeta.add(centrado(etiqueta("¡Completado!", Tema.TAMANO_TITULO_VICTORIA, true, "victoria")));
+		tarjeta.add(centrado(titulo));
 		tarjeta.add(Box.createVerticalStrut(Tema.SEPARACION_SECCION));
 		tarjeta.add(centrado(detalle));
 		tarjeta.add(Box.createVerticalGlue());

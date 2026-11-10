@@ -18,7 +18,7 @@ final class PanelProximamente {
 	private final JPanel panel = new JPanel(new BorderLayout());
 	private final BotonPrincipal host = new BotonPrincipal("Crear partida (Host)");
 	private final BotonPrincipal cliente = new BotonPrincipal("Unirse a partida (Cliente)");
-	private final BotonFantasma volver = new BotonFantasma("Volver al menú", false);
+	private final BotonFantasma volver = new BotonFantasma("Volver / Cancelar", false);
 	private final JLabel estadoMensaje = etiqueta(" ", Tema.TAMANO_ESTADO, false, Tema.TINTA);
 
 	PanelProximamente(Runnable crearHost, Runnable unirseCliente, Runnable volverAlMenu) {
@@ -126,7 +126,9 @@ final class PanelProximamente {
 	void ocupado(boolean ocupado) {
 		host.setEnabled(!ocupado);
 		cliente.setEnabled(!ocupado);
-		volver.setEnabled(!ocupado);
+		volver.setEnabled(true);
+		host.cambiarTexto(ocupado ? "Conectando…" : "Crear partida (Host)");
+		cliente.cambiarTexto(ocupado ? "Conectando…" : "Unirse a partida (Cliente)");
 	}
 
 	void mostrarEstado(String mensaje) {

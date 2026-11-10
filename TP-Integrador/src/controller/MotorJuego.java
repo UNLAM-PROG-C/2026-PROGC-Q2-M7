@@ -28,17 +28,26 @@ public class MotorJuego {
 	private Dificultad dificultadActual;
 	private final Consumer<ActualizacionVista> vista;
 	private boolean manchadoPorTomate;
+	private final int rondasObjetivo;
+	private int rondasGanadasLocal = 0;
+	private int rondasGanadasRival = 0;
+	private boolean partidaFinalizada = false;
 
 	public MotorJuego(int rol, EventBus bus, Consumer<ActualizacionVista> vista) throws IOException {
-		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, bus, vista);
+		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, Constantes.RONDAS_POR_DEFECTO, bus, vista);
 	}
 
 	public MotorJuego(int rol, String host, int puerto, EventBus bus, Consumer<ActualizacionVista> vista) throws IOException {
+		this(rol, host, puerto, Constantes.RONDAS_POR_DEFECTO, bus, vista);
+	}
+
+	public MotorJuego(int rol, String host, int puerto, int rondasObjetivo, EventBus bus, Consumer<ActualizacionVista> vista) throws IOException {
 		this.bus = bus;
 		this.vista = vista;
 		this.generador = new GeneradorNivel();
 		this.dificultadActual = Dificultad.MEDIA;
 		this.manchadoPorTomate = false;
+		this.rondasObjetivo = Math.max(Constantes.MIN_RONDAS, Math.min(Constantes.MAX_RONDAS, rondasObjetivo));
 		if (rol == Constantes.ROL_HOST || rol == Constantes.ROL_CLIENTE) {
 			this.red = new GestorRed(rol, host, puerto, bus);
 		} else {
@@ -82,6 +91,7 @@ public class MotorJuego {
 			case REINICIAR -> procesarReiniciar();
 			case RIVAL_COMPLETO_GRILLA -> procesarRivalCompletoGrilla();
 			case LIMPIAR_TOMATE -> procesarLimpiarTomate();
+			case PARTIDA_FINALIZADA -> procesarPartidaFinalizada();
 			case CONEXION_PERDIDA -> procesarConexionPerdida();
 			case GRILLA_COMPLETA -> procesarGrillaCompleta();
 			default -> System.err.println("Evento no conocido: " + event.tipo());
@@ -94,71 +104,103 @@ public class MotorJuego {
 		} else if (this.dificultadActual == null) {
 			this.dificultadActual = Dificultad.MEDIA;
 		}
+		this.rondasGanadasLocal = 0;
+		this.rondasGanadasRival = 0;
+		this.partidaFinalizada = false;
 		this.tablero = new TableroZip(generador.generar(dificultadActual));
 		this.manchadoPorTomate = false;
-		notificarVista("¡Nivel iniciado! Conectá los números en orden.");
+		notificarVista("¡Partida iniciada! Conectá los números en orden.");
 	}
 
 	private void procesarDeshacer() {
-		if (tablero != null) {
-			boolean ok = tablero.deshacer();
-			notificarVista(ok ? "Paso deshecho." : "No se puede deshacer más.");
+		if (partidaFinalizada || tablero == null) {
+			return;
 		}
+		boolean ok = tablero.deshacer();
+		notificarVista(ok ? "Paso deshecho." : "No se puede deshacer más.");
 	}
 
 	private void procesarReiniciar() {
-		if (tablero != null) {
-			tablero.reiniciar();
-			notificarVista("Nivel reiniciado.");
+		if (partidaFinalizada || tablero == null) {
+			return;
 		}
+		tablero.reiniciar();
+		notificarVista("Ronda reiniciada.");
 	}
 
 	private void procesarMovimiento(Object payload) {
-		if (tablero == null || !(payload instanceof Direccion direccion)) {
+		if (partidaFinalizada || tablero == null || !(payload instanceof Direccion direccion)) {
 			return;
 		}
 		ResultadoMovimiento resultado = tablero.mover(direccion);
 		notificarVista(resultado.mensaje());
 		if (tablero.estadoJuego().gano()) {
-			if (red != null) {
-				procesarGrillaCompleta();
-			}
+			procesarGrillaCompleta();
 		}
 	}
 
 	private void procesarGrillaCompleta() {
-		System.out.println("[LOCAL] ¡Completaste la grilla! Enviando tomate al rival...");
-		if (red != null) {
-			red.enviarEvento(TipoEvento.RIVAL_COMPLETO_GRILLA);
+		rondasGanadasLocal++;
+		if (rondasGanadasLocal >= rondasObjetivo) {
+			partidaFinalizada = true;
+			if (red != null) {
+				red.enviarEvento(TipoEvento.PARTIDA_FINALIZADA);
+			}
+			notificarVista("¡GANASTE LA PARTIDA! (" + rondasGanadasLocal + " - " + rondasGanadasRival + ")");
+		} else {
+			if (red != null) {
+				red.enviarEvento(TipoEvento.RIVAL_COMPLETO_GRILLA);
+			}
+			notificarVista("¡Ronda ganada! (" + rondasGanadasLocal + "/" + rondasObjetivo + "). Siguiente ronda...");
+			this.tablero = new TableroZip(generador.generar(dificultadActual));
+			this.manchadoPorTomate = false;
+			notificarVista("Nueva ronda. Marcador: Vos " + rondasGanadasLocal + " - " + rondasGanadasRival + " Rival");
 		}
-		notificarVista("¡Completaste la grilla! Enviando tomate al rival...");
 	}
 
 	private void procesarRivalCompletoGrilla() {
-		System.out.println("[TOMATE] ¡Rival completó grilla! Pantalla manchada por " + Constantes.SEGUNDOS_TOMATE + "s...");
-		manchadoPorTomate = true;
-		notificarVista("¡Rival completó la grilla! ¡Tomatazo recibido por " + Constantes.SEGUNDOS_TOMATE + "s!");
-		timer.schedule(() -> 
-			bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE)),
-			Constantes.SEGUNDOS_TOMATE, TimeUnit.SECONDS
-		);
+		rondasGanadasRival++;
+		if (rondasGanadasRival >= rondasObjetivo) {
+			partidaFinalizada = true;
+			notificarVista("¡El rival completó " + rondasObjetivo + " rondas y ganó la partida!");
+		} else {
+			manchadoPorTomate = true;
+			notificarVista("¡Rival completó grilla! (" + rondasGanadasLocal + " - " + rondasGanadasRival + ") ¡Tomatazo recibido!");
+			timer.schedule(() -> 
+				bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE)),
+				Constantes.SEGUNDOS_TOMATE, TimeUnit.SECONDS
+			);
+		}
 	}
 
 	private void procesarLimpiarTomate() {
-		System.out.println("[LIMPIO] Pasaron los " + Constantes.SEGUNDOS_TOMATE + "s. Se limpió el tomate.");
 		manchadoPorTomate = false;
 		notificarVista("Se limpió el tomate. ¡Seguí jugando!");
 	}
 
+	private void procesarPartidaFinalizada() {
+		partidaFinalizada = true;
+		rondasGanadasRival = rondasObjetivo;
+		notificarVista("¡El rival completó " + rondasObjetivo + " rondas y ganó la partida!");
+	}
+
 	private void procesarConexionPerdida() {
 		System.err.println("[RED] Conexión perdida.");
-		notificarVista("Conexión con el rival perdida.");
+		notificarVista("Conexión con el rival perdida. Podés volver al menú.");
 	}
 
 	private void notificarVista(String mensaje) {
 		if (vista != null) {
 			EstadoJuego estado = (tablero != null) ? tablero.estadoJuego() : null;
-			ActualizacionVista actualizacion = new ActualizacionVista(estado, mensaje, manchadoPorTomate);
+			ActualizacionVista actualizacion = new ActualizacionVista(
+					estado,
+					mensaje,
+					manchadoPorTomate,
+					rondasGanadasLocal,
+					rondasGanadasRival,
+					rondasObjetivo,
+					partidaFinalizada,
+					partidaFinalizada && rondasGanadasLocal >= rondasObjetivo);
 			SwingUtilities.invokeLater(() -> vista.accept(actualizacion));
 		}
 	}

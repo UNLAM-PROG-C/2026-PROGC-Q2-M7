@@ -14,5 +14,10 @@ public final class Constantes {
 	public static final int HILOS_TIMER = 1;
 	public static final int SEGUNDOS_TOMATE = 4;
 	
+	// Constantes de rondas
+	public static final int MIN_RONDAS = 1;
+	public static final int MAX_RONDAS = 5;
+	public static final int RONDAS_POR_DEFECTO = 3;
+	
 	private Constantes() {}
 }

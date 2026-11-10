@@ -4,17 +4,29 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 
 import events.*;
 import utils.Constantes;
 
 public class GestorRed {
+	private static volatile ServerSocket serverSocketPendiente;
 	private final Socket socket;
 	private final EventBus bus;
 	private final PrintWriter salida;
 	private final BufferedReader entrada;
+
+	public static void cancelarEsperaServidor() {
+		ServerSocket pendiente = serverSocketPendiente;
+		if (pendiente != null && !pendiente.isClosed()) {
+			try {
+				pendiente.close();
+			} catch (IOException ignored) {}
+		}
+	}
 
 	public GestorRed(int rol, EventBus bus) throws IOException {
 		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, bus);
@@ -30,12 +42,29 @@ public class GestorRed {
 	private Socket obtenerSocket(int rol, String host, int puerto) throws IOException {
 		if (rol == Constantes.ROL_HOST) {
 			System.out.println("Esperando rival en puerto " + puerto + "...");
-			try (ServerSocket server = new ServerSocket(puerto)) {
+			ServerSocket server = new ServerSocket();
+			server.setReuseAddress(true);
+			server.bind(new InetSocketAddress(puerto));
+			serverSocketPendiente = server;
+			try {
 				return server.accept();
+			} catch (SocketException e) {
+				if (server.isClosed()) {
+					throw new IOException("Espera de host cancelada.", e);
+				}
+				throw e;
+			} finally {
+				serverSocketPendiente = null;
+				try {
+					server.close();
+				} catch (IOException ignored) {}
 			}
 		}
 		System.out.println("Conectando a " + host + ":" + puerto + "...");
-		return new Socket(host, puerto);
+		Socket cliente = new Socket();
+		cliente.setReuseAddress(true);
+		cliente.connect(new InetSocketAddress(host, puerto), 5000);
+		return cliente;
 	}
 
 	public void iniciarEscucha() {
@@ -54,6 +83,8 @@ public class GestorRed {
 				}
 			}
 		} catch (IOException e) {
+			// Red cerrada
+		} finally {
 			bus.publicar(new Evento(TipoEvento.CONEXION_PERDIDA));
 		}
 	}
@@ -65,11 +96,14 @@ public class GestorRed {
 	}
 
 	public void cerrar() throws IOException {
+		cancelarEsperaServidor();
 		if (salida != null) {
 			salida.close();
 		}
 		if (entrada != null) {
-			entrada.close();
+			try {
+				entrada.close();
+			} catch (IOException ignored) {}
 		}
 		if (socket != null && !socket.isClosed()) {
 			socket.close();

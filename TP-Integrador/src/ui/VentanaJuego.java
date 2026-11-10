@@ -18,6 +18,7 @@ import events.TipoEvento;
 import model.Dificultad;
 import model.EstadoJuego;
 import model.ModoJuego;
+import network.GestorRed;
 import utils.Constantes;
 
 public final class VentanaJuego implements AutoCloseable {
@@ -85,7 +86,8 @@ public final class VentanaJuego implements AutoCloseable {
 		try {
 			EventBus bus = new EventBus();
 			this.busActual = bus;
-			MotorJuego motor = new MotorJuego(Constantes.ROL_LOCAL, bus, this::recibir);
+			int rondas = configuracion.rondasSeleccionadas();
+			MotorJuego motor = new MotorJuego(Constantes.ROL_LOCAL, Constantes.IP_LOCAL, Constantes.PUERTO, rondas, bus, this::recibir);
 			this.motorActual = motor;
 			motor.iniciar();
 			bus.publicar(new Evento(TipoEvento.INICIAR, dificultad));
@@ -98,21 +100,23 @@ public final class VentanaJuego implements AutoCloseable {
 		victoria.ocultarSuperposicion();
 		abandonar();
 		this.dificultadActual = configuracion.dificultadSeleccionada();
+		int rondas = configuracion.rondasSeleccionadas();
 		juego.controles(configuracion.controlesSeleccionados());
 		proximamente.ocupado(true);
-		proximamente.mostrarEstado("Esperando rival en puerto " + Constantes.PUERTO + "...");
+		proximamente.mostrarEstado("Esperando rival en puerto " + Constantes.PUERTO + " (Rondas: " + rondas + ")...");
 
 		new Thread(() -> {
 			try {
 				EventBus bus = new EventBus();
-				MotorJuego motor = new MotorJuego(Constantes.ROL_HOST, bus, this::recibir);
+				MotorJuego motor = new MotorJuego(Constantes.ROL_HOST, Constantes.IP_LOCAL, Constantes.PUERTO, rondas, bus, this::recibir);
 				this.busActual = bus;
 				this.motorActual = motor;
 				motor.iniciar();
 				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
 			} catch (IOException e) {
 				SwingUtilities.invokeLater(() -> {
-					proximamente.mostrarError("Error al iniciar host: " + e.getMessage());
+					proximamente.ocupado(false);
+					proximamente.mostrarError("Espera cancelada o error: " + e.getMessage());
 				});
 			}
 		}, "Thread-Conexion-Host").start();
@@ -153,6 +157,7 @@ public final class VentanaJuego implements AutoCloseable {
 		victoria.ocultarSuperposicion();
 		abandonar();
 		this.dificultadActual = configuracion.dificultadSeleccionada();
+		int rondas = configuracion.rondasSeleccionadas();
 		juego.controles(configuracion.controlesSeleccionados());
 		proximamente.ocupado(true);
 		proximamente.mostrarEstado("Conectando a " + destinoHost + ":" + destinoPuerto + "...");
@@ -160,13 +165,14 @@ public final class VentanaJuego implements AutoCloseable {
 		new Thread(() -> {
 			try {
 				EventBus bus = new EventBus();
-				MotorJuego motor = new MotorJuego(Constantes.ROL_CLIENTE, destinoHost, destinoPuerto, bus, this::recibir);
+				MotorJuego motor = new MotorJuego(Constantes.ROL_CLIENTE, destinoHost, destinoPuerto, rondas, bus, this::recibir);
 				this.busActual = bus;
 				this.motorActual = motor;
 				motor.iniciar();
 				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
 			} catch (IOException e) {
 				SwingUtilities.invokeLater(() -> {
+					proximamente.ocupado(false);
 					proximamente.mostrarError("Error al conectar con host: " + e.getMessage());
 				});
 			}
@@ -184,6 +190,7 @@ public final class VentanaJuego implements AutoCloseable {
 	}
 
 	private void restaurarMenu() {
+		abandonar();
 		modoActual = modoAnterior;
 		configuracion.seleccionarModo(modoActual);
 		tarjetas.show(contenido, CONFIGURACION);
@@ -197,8 +204,8 @@ public final class VentanaJuego implements AutoCloseable {
 		}
 		configuracion.ocupado(false);
 		proximamente.ocupado(false);
-		juego.mostrar(actualizacion.estadoJuego(), actualizacion.mensaje(), actualizacion.manchadoPorTomate());
-		actualizarVictoria(actualizacion.estadoJuego());
+		juego.mostrar(actualizacion);
+		actualizarVictoria(actualizacion);
 		boolean primeraVisualizacion = !juego.componente().isShowing();
 		tarjetas.show(contenido, JUEGO);
 		if (primeraVisualizacion) {
@@ -223,6 +230,7 @@ public final class VentanaJuego implements AutoCloseable {
 	}
 
 	private void abandonar() {
+		GestorRed.cancelarEsperaServidor();
 		if (motorActual != null) {
 			motorActual.finalizar();
 			motorActual = null;
@@ -230,9 +238,15 @@ public final class VentanaJuego implements AutoCloseable {
 		busActual = null;
 	}
 
-	private void actualizarVictoria(EstadoJuego estadoJuego) {
-		if (estadoJuego.gano()) {
-			victoria.mostrarVictoria(estadoJuego);
+	private void actualizarVictoria(ActualizacionVista act) {
+		if (act.partidaFinalizada()) {
+			if (act.ganoLocal()) {
+				victoria.mostrarFinPartida("¡VICTORIA!",
+						"Ganaste la partida final (" + act.rondasLocal() + " a " + act.rondasRival() + ")");
+			} else {
+				victoria.mostrarFinPartida("¡DERROTA!",
+						"El rival ganó la partida final (" + act.rondasLocal() + " a " + act.rondasRival() + ")");
+			}
 		} else {
 			victoria.ocultarSuperposicion();
 		}

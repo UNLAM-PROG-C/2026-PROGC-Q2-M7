@@ -16,6 +16,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import controller.ActualizacionVista;
 import model.Direccion;
 import model.EstadoJuego;
 
@@ -73,9 +74,9 @@ final class PanelJuego {
 		JLabel titulo = etiqueta("ZIP", Tema.TAMANO_TITULO_JUEGO, Tema.TINTA);
 		titulo.setFont(Tema.fuenteConEspaciado(Tema.TAMANO_TITULO_JUEGO, true,
 				Tema.ESPACIADO_TITULO_JUEGO));
-		BotonFantasma volver = new BotonFantasma("Volver", true);
+		BotonFantasma volver = new BotonFantasma("Desconectar / Menú", true);
 		volver.setName("volver");
-		volver.setPreferredSize(new Dimension(Tema.ANCHO_VOLVER_FANTASMA, Tema.ALTO_FANTASMA));
+		volver.setPreferredSize(new Dimension(Tema.ANCHO_VOLVER_FANTASMA + 60, Tema.ALTO_FANTASMA));
 		volver.agregarEscucha(evento -> accionVolver.run());
 		barra.add(titulo, BorderLayout.WEST);
 		barra.add(volver, BorderLayout.EAST);
@@ -184,16 +185,29 @@ final class PanelJuego {
 		});
 	}
 
-	void mostrar(EstadoJuego estadoJuego, String mensaje, boolean manchadoPorTomate) {
-		jugando = !estadoJuego.gano();
-		tablero.mostrar(estadoJuego, manchadoPorTomate);
+	void mostrar(ActualizacionVista act) {
+		EstadoJuego estadoJuego = act.estadoJuego();
+		if (estadoJuego == null) {
+			mensaje(act.mensaje());
+			return;
+		}
+		jugando = !act.partidaFinalizada() && !estadoJuego.gano();
+		tablero.mostrar(estadoJuego, act.manchadoPorTomate());
 		celdas.establecerValor(estadoJuego.visitadas() + "/" + estadoJuego.nivel().cantidadCeldas());
-		siguiente.establecerValor(estadoJuego.gano()
-				? "Completado" : Integer.toString(estadoJuego.proximoNumero()));
+		String textoSiguiente = estadoJuego.gano()
+				? "Completado" : Integer.toString(estadoJuego.proximoNumero());
+		if (act.rondasObjetivo() > 1) {
+			textoSiguiente += " · " + act.rondasLocal() + "-" + act.rondasRival() + " (" + act.rondasObjetivo() + ")";
+		}
+		siguiente.establecerValor(textoSiguiente);
 		progreso.establecerValor((double) estadoJuego.visitadas()
 				/ estadoJuego.nivel().cantidadCeldas());
 		deshacer.setEnabled(jugando && estadoJuego.visitadas() > 1);
-		mensaje(mensaje);
+		mensaje(act.mensaje());
+	}
+
+	void mostrar(EstadoJuego estadoJuego, String mensaje, boolean manchadoPorTomate) {
+		mostrar(new ActualizacionVista(estadoJuego, mensaje, manchadoPorTomate));
 	}
 
 	void mostrar(EstadoJuego estadoJuego, String mensaje) {
