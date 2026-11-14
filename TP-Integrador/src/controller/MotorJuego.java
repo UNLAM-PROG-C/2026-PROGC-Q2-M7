@@ -72,7 +72,9 @@ public class MotorJuego {
 		while (!Thread.currentThread().isInterrupted()) {
 			try {
 				Evento event = bus.tomar();
-				despacharEvento(event);
+				if (event != null && event.tipo() != null) {
+					despacharEvento(event);
+				}
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 				break;
@@ -81,12 +83,10 @@ public class MotorJuego {
 	}
 
 	private void despacharEvento(Evento event) {
-		if (event == null || event.tipo() == null) {
-			return;
-		}
 		switch (event.tipo()) {
 			case INICIAR -> procesarIniciar(event.payload());
 			case MOVIMIENTO -> procesarMovimiento(event.payload());
+			case IR_A_CELDA -> procesarIrACelda(event.payload());
 			case DESHACER -> procesarDeshacer();
 			case REINICIAR -> procesarReiniciar();
 			case RIVAL_COMPLETO_GRILLA -> procesarRivalCompletoGrilla();
@@ -133,6 +133,21 @@ public class MotorJuego {
 			return;
 		}
 		ResultadoMovimiento resultado = tablero.mover(direccion);
+		notificarVista(resultado.mensaje());
+		if (tablero.estadoJuego().gano()) {
+			procesarGrillaCompleta();
+		}
+	}
+
+	private void procesarIrACelda(Object payload) {
+		if (partidaFinalizada || tablero == null || !(payload instanceof DestinoCelda destino)
+				|| destino.nivel() != tablero.nivel()) {
+			return;
+		}
+		ResultadoMovimiento resultado = tablero.irA(destino.celda());
+		if (resultado == ResultadoMovimiento.SIN_EFECTO) {
+			return;
+		}
 		notificarVista(resultado.mensaje());
 		if (tablero.estadoJuego().gano()) {
 			procesarGrillaCompleta();

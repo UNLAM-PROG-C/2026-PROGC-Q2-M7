@@ -2,6 +2,7 @@ package events;
 
 public enum TipoEvento {
 	MOVIMIENTO,
+	IR_A_CELDA,
 
 	CONEXION_ESTABLECIDA,
 	CONEXION_PERDIDA,

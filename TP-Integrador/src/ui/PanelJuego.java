@@ -17,6 +17,7 @@ import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import controller.ActualizacionVista;
+import events.DestinoCelda;
 import model.Direccion;
 import model.EstadoJuego;
 
@@ -32,15 +33,16 @@ final class PanelJuego {
 	private final JPanel teclasAyuda = horizontal();
 	private final BotonSecundario deshacer = new BotonSecundario("Deshacer", TipoIcono.DESHACER);
 	private final BotonSecundario reiniciar = new BotonSecundario("Reiniciar", TipoIcono.REINICIAR);
-	private final AdaptadorMouse adaptadorMouse = new AdaptadorMouse(tablero, this::mover,
-			this::deshacerPaso);
+	private final AdaptadorMouse adaptadorMouse = new AdaptadorMouse(tablero, this::irA);
 	private final Consumer<Direccion> mover;
+	private final Consumer<DestinoCelda> irA;
 	private final Runnable accionDeshacer;
 	private boolean jugando;
 
-	PanelJuego(Consumer<Direccion> mover, Runnable accionDeshacer,
+	PanelJuego(Consumer<Direccion> mover, Consumer<DestinoCelda> irA, Runnable accionDeshacer,
 			Runnable accionReiniciar, Runnable volver) {
 		this.mover = mover;
+		this.irA = irA;
 		this.accionDeshacer = accionDeshacer;
 		configurarPanel();
 		adaptadorMouse.instalar();
@@ -59,10 +61,7 @@ final class PanelJuego {
 		estadoMensaje.setName("estado-mensaje");
 		deshacer.setName("deshacer");
 		reiniciar.setName("reiniciar");
-		deshacer.agregarEscucha(evento -> {
-			adaptadorMouse.descartar();
-			accionDeshacer.run();
-		});
+		deshacer.agregarEscucha(evento -> accionDeshacer.run());
 	}
 
 	private JPanel encabezado(Runnable accionVolver) {
@@ -103,10 +102,7 @@ final class PanelJuego {
 
 	private JPanel pie(Runnable accionReiniciar) {
 		JPanel pie = vertical();
-		reiniciar.agregarEscucha(evento -> {
-			adaptadorMouse.descartar();
-			accionReiniciar.run();
-		});
+		reiniciar.agregarEscucha(evento -> accionReiniciar.run());
 		pie.add(centrado(teclasAyuda));
 		pie.add(Box.createVerticalStrut(Tema.SEPARACION_AYUDA));
 		pie.add(centrado(etiqueta("Conectá los números en orden y recorré todas las celdas.",
@@ -196,9 +192,9 @@ final class PanelJuego {
 		}
 	}
 
-	private void deshacerPaso() {
+	private void irA(DestinoCelda destino) {
 		if (jugando) {
-			accionDeshacer.run();
+			irA.accept(destino);
 		}
 	}
 

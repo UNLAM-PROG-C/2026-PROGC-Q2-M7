@@ -39,6 +39,7 @@ public final class VentanaJuego implements AutoCloseable {
 	private final PanelProximamente proximamente = new PanelProximamente(this::iniciarHost, this::iniciarCliente, this::restaurarMenu);
 	private final PanelJuego juego = new PanelJuego(
 			direccion -> publicarEvento(new Evento(TipoEvento.MOVIMIENTO, direccion)),
+			destino -> publicarEvento(new Evento(TipoEvento.IR_A_CELDA, destino)),
 			() -> publicarEvento(new Evento(TipoEvento.DESHACER)),
 			() -> publicarEvento(new Evento(TipoEvento.REINICIAR)),
 			this::menu);

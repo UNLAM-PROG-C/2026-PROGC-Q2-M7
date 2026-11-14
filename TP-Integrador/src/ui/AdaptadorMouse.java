@@ -1,33 +1,37 @@
 package ui;
 
+import events.DestinoCelda;
+import java.awt.Point;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import model.Direccion;
+import model.Celda;
 import model.EstadoJuego;
+import model.Nivel;
 
 /**
- * Traduce el arrastre del mouse sobre el tablero en movimientos y deshaceres inmediatos.
+ * Traduce el arrastre del mouse sobre el tablero en pedidos de "ir a esta celda".
  *
- * <p>Se aprieta sobre cualquier celda del camino (la punta para seguir, una anterior para volver
- * hasta ahí) y se arrastra: hacia adelante avanza y sobre el camino retrocede. Publica los mismos
- * eventos que el teclado; bus, motor y modelo no se enteran del mouse.
+ * <p>No calcula movimientos: publica cada celda que cruza el cursor y el motor, que tiene el
+ * estado real, decide si eso avanza, retrocede o no hace nada. El gesto empieza apretando sobre
+ * una celda del camino (la punta para seguir, una anterior para volver hasta ahí).
  */
 final class AdaptadorMouse extends MouseAdapter {
 	private final PanelTablero tablero;
-	private final Consumer<Direccion> mover;
-	private final Runnable deshacer;
-	private TrazoMouse camino;
+	private final Consumer<DestinoCelda> irA;
+	private Celda ultimaCelda;
+	private Nivel nivelDelGesto;
 	private boolean arrastrando;
 	private boolean habilitado;
 
-	AdaptadorMouse(PanelTablero tablero, Consumer<Direccion> mover, Runnable deshacer) {
+	AdaptadorMouse(PanelTablero tablero, Consumer<DestinoCelda> irA) {
 		this.tablero = tablero;
-		this.mover = mover;
-		this.deshacer = deshacer;
+		this.irA = irA;
 	}
 
 	void instalar() {
@@ -36,35 +40,23 @@ final class AdaptadorMouse extends MouseAdapter {
 		tablero.addFocusListener(new FocusAdapter() {
 			@Override
 			public void focusLost(FocusEvent evento) {
-				arrastrando = false;
+				terminar();
 			}
 		});
 	}
 
 	void habilitar(boolean habilitado) {
 		this.habilitado = habilitado;
-		descartar();
-	}
-
-	/** Olvida la copia local: el camino cambió por fuera del mouse (botón deshacer, reiniciar). */
-	void descartar() {
-		camino = null;
-		arrastrando = false;
+		terminar();
+		ultimaCelda = null;
+		nivelDelGesto = null;
 	}
 
 	@Override
 	public void mousePressed(MouseEvent evento) {
-		arrastrando = false;
-		if (!habilitado || evento.getButton() != MouseEvent.BUTTON1) {
-			return;
-		}
-		sincronizar();
-		if (camino != null) {
-			tablero.celdaEn(evento.getPoint()).filter(camino::contiene).ifPresent(celda -> {
-				camino.llevarHacia(celda);
-				arrastrando = true;
-				tablero.requestFocusInWindow();
-			});
+		terminar();
+		if (habilitado && evento.getButton() == MouseEvent.BUTTON1) {
+			iniciar(evento.getPoint());
 		}
 	}
 
@@ -73,31 +65,71 @@ final class AdaptadorMouse extends MouseAdapter {
 		if (!habilitado || !arrastrando) {
 			return;
 		}
-		if (!sigueSincronizado()) {
-			descartar();
-			return;
-		}
-		tablero.celdaEn(evento.getPoint()).ifPresent(camino::llevarHacia);
+		tablero.celdaEn(evento.getPoint())
+				.filter(celda -> !celda.equals(ultimaCelda))
+				.ifPresent(this::recorrerHasta);
 	}
 
 	@Override
 	public void mouseReleased(MouseEvent evento) {
 		if (evento.getButton() == MouseEvent.BUTTON1) {
-			arrastrando = false;
+			terminar();
 		}
 	}
 
-	/** Reusa la copia local mientras el motor solo esté atrasado; si no, la rehace del snapshot. */
-	private void sincronizar() {
+	/** El gesto empieza solo sobre el camino visible; qué pasa después lo decide el motor. */
+	private void iniciar(Point punto) {
 		Optional<EstadoJuego> estado = tablero.estadoActual();
-		if (estado.isEmpty()) {
-			camino = null;
-		} else if (camino == null || !camino.conoce(estado.get())) {
-			camino = new TrazoMouse(estado.get(), mover, deshacer);
+		Optional<Celda> celda = tablero.celdaEn(punto);
+		if (estado.isEmpty() || celda.isEmpty() || !puedeEmpezarEn(estado.get(), celda.get())) {
+			return;
 		}
+		nivelDelGesto = estado.get().nivel();
+		ultimaCelda = celda.get();
+		arrastrando = true;
+		publicar(ultimaCelda);
+		tablero.requestFocusInWindow();
 	}
 
-	private boolean sigueSincronizado() {
-		return tablero.estadoActual().filter(camino::conoce).isPresent();
+	/** Sobre el camino visible, o donde terminó el gesto anterior si el motor aún no lo mostró. */
+	private boolean puedeEmpezarEn(EstadoJuego estado, Celda celda) {
+		return estado.recorrido().contains(celda)
+				|| (estado.nivel() == nivelDelGesto && celda.equals(ultimaCelda));
+	}
+
+	/** Publica también las celdas intermedias que un arrastre rápido salteó. */
+	private void recorrerHasta(Celda destino) {
+		for (Celda celda : celdasEntre(ultimaCelda, destino)) {
+			publicar(celda);
+		}
+		ultimaCelda = destino;
+	}
+
+	private void publicar(Celda celda) {
+		irA.accept(new DestinoCelda(nivelDelGesto, celda));
+	}
+
+	private void terminar() {
+		arrastrando = false;
+	}
+
+	/** Celdas de un paso cada una que van de desde (excluida) a hasta (incluida). */
+	private static List<Celda> celdasEntre(Celda desde, Celda hasta) {
+		List<Celda> celdas = new ArrayList<>();
+		Celda actual = desde;
+		while (!actual.equals(hasta)) {
+			actual = pasoHacia(actual, hasta);
+			celdas.add(actual);
+		}
+		return celdas;
+	}
+
+	private static Celda pasoHacia(Celda desde, Celda hasta) {
+		int filas = hasta.fila() - desde.fila();
+		int columnas = hasta.columna() - desde.columna();
+		if (Math.abs(columnas) >= Math.abs(filas)) {
+			return new Celda(desde.fila(), desde.columna() + Integer.signum(columnas));
+		}
+		return new Celda(desde.fila() + Integer.signum(filas), desde.columna());
 	}
 }
