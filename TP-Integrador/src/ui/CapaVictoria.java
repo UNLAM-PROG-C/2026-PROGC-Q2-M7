@@ -1,12 +1,13 @@
 package ui;
 
 import java.awt.AlphaComposite;
-import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagLayout;
 import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -14,26 +15,54 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import model.EstadoJuego;
 
 final class CapaVictoria extends JPanel {
 	private static final long serialVersionUID = 1L;
-	private final JLabel titulo = etiqueta("¡Completado!", Tema.TAMANO_TITULO_VICTORIA, true, "victoria");
-	private final JLabel detalle = etiqueta("", Tema.TAMANO_DETALLE_VICTORIA, false);
-	private final BotonPrincipal jugarNuevamente = new BotonPrincipal("Jugar de nuevo");
-	private final BotonSecundario menu = new BotonSecundario("Volver al menú", null);
+	private static final int ANCHO_TARJETA_VICTORIA = 420;
+	private static final int ALTO_TARJETA_VICTORIA = 370;
+	private static final int RELLENO_VICTORIA = 32;
+	private static final int TAMANO_DETALLE_VICTORIA = 18;
+	private static final int SOMBRA_VICTORIA = 12;
+	private static final int ANCHO_BOTON_VICTORIA = 320;
+	private static final float TRANSPARENCIA_SUPERPOSICION = 0.35f;
+	private static final float TRANSPARENCIA_SOMBRA = 0.16f;
+
+	private final JLabel titulo = crearEtiqueta("¡Completado!", Font.BOLD,
+			Tema.TAMANO_TITULO_GRANDE, "victoria");
+	private final JLabel detalle = crearEtiqueta("", Font.PLAIN,
+			TAMANO_DETALLE_VICTORIA, null);
+	private final BotonEstilo jugarNuevamente = BotonEstilo.principal("Jugar de nuevo");
+	private final BotonEstilo menu = BotonEstilo.secundario("Volver al menú");
 
 	CapaVictoria(Runnable jugarOtraVez, Runnable volverAlMenu) {
 		super(new GridBagLayout());
 		setOpaque(false);
 		setVisible(false);
+		setFocusCycleRoot(true);
 		setName("superposicion-victoria");
-		addMouseListener(new MouseAdapter() { });
+		instalarBloqueoEntrada();
+		configurarBotones(jugarOtraVez, volverAlMenu);
+		add(tarjeta());
+	}
+
+	private void instalarBloqueoEntrada() {
+		MouseAdapter bloqueo = new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent evento) {
+				if (!menu.hasFocus()) {
+					jugarNuevamente.requestFocusInWindow();
+				}
+			}
+		};
+		addMouseListener(bloqueo);
+		addMouseMotionListener(bloqueo);
+	}
+
+	private void configurarBotones(Runnable jugarOtraVez, Runnable volverAlMenu) {
 		jugarNuevamente.setName("jugar-de-nuevo");
 		menu.setName("menu-victoria");
-		jugarNuevamente.agregarEscucha(evento -> cerrarYEjecutar(jugarOtraVez));
-		menu.agregarEscucha(evento -> cerrarYEjecutar(volverAlMenu));
-		add(tarjeta());
+		jugarNuevamente.addActionListener(evento -> cerrarYEjecutar(jugarOtraVez));
+		menu.addActionListener(evento -> cerrarYEjecutar(volverAlMenu));
 	}
 
 	void mostrarFinPartida(String tituloTexto, String detalleTexto) {
@@ -41,10 +70,6 @@ final class CapaVictoria extends JPanel {
 		detalle.setText(detalleTexto);
 		setVisible(true);
 		SwingUtilities.invokeLater(jugarNuevamente::requestFocusInWindow);
-	}
-
-	void mostrarVictoria(EstadoJuego estadoJuego) {
-		mostrarFinPartida("¡Completado!", estadoJuego.visitadas() + " de " + estadoJuego.nivel().cantidadCeldas() + " celdas");
 	}
 
 	void ocultarSuperposicion() {
@@ -55,7 +80,7 @@ final class CapaVictoria extends JPanel {
 	protected void paintComponent(Graphics graficos) {
 		Graphics2D dibujo = (Graphics2D) graficos.create();
 		try {
-			dibujo.setComposite(AlphaComposite.SrcOver.derive(Tema.TRANSPARENCIA_SUPERPOSICION));
+			dibujo.setComposite(AlphaComposite.SrcOver.derive(TRANSPARENCIA_SUPERPOSICION));
 			dibujo.setColor(Tema.TINTA);
 			dibujo.fillRect(0, 0, getWidth(), getHeight());
 		} finally {
@@ -66,45 +91,30 @@ final class CapaVictoria extends JPanel {
 	private JPanel tarjeta() {
 		JPanel tarjeta = new TarjetaVictoria();
 		tarjeta.setLayout(new BoxLayout(tarjeta, BoxLayout.Y_AXIS));
-		tarjeta.setBorder(BorderFactory.createEmptyBorder(Tema.RELLENO_VICTORIA,
-				Tema.RELLENO_VICTORIA, Tema.RELLENO_VICTORIA, Tema.RELLENO_VICTORIA));
-		tarjeta.setPreferredSize(new Dimension(Tema.ANCHO_TARJETA_VICTORIA, Tema.ALTO_TARJETA_VICTORIA));
-		tarjeta.add(centrado(titulo));
+		tarjeta.setBorder(BorderFactory.createEmptyBorder(RELLENO_VICTORIA,
+				RELLENO_VICTORIA, RELLENO_VICTORIA, RELLENO_VICTORIA));
+		tarjeta.setPreferredSize(new Dimension(ANCHO_TARJETA_VICTORIA, ALTO_TARJETA_VICTORIA));
+		tarjeta.add(Tema.centrar(titulo));
 		tarjeta.add(Box.createVerticalStrut(Tema.SEPARACION_SECCION));
-		tarjeta.add(centrado(detalle));
+		tarjeta.add(Tema.centrar(detalle));
 		tarjeta.add(Box.createVerticalGlue());
-		tarjeta.add(centrado(boton(jugarNuevamente)));
-		tarjeta.add(Box.createVerticalStrut(Tema.SEPARACION_RESUMEN));
-		tarjeta.add(centrado(boton(menu)));
+		tarjeta.add(Tema.centrar(ajustarBoton(jugarNuevamente)));
+		tarjeta.add(Box.createVerticalStrut(Tema.SEPARACION_MEDIA));
+		tarjeta.add(Tema.centrar(ajustarBoton(menu)));
 		return tarjeta;
 	}
 
-	private Component boton(Component boton) {
-		boton.setPreferredSize(new Dimension(Tema.ANCHO_BOTON_VICTORIA,
+	private BotonEstilo ajustarBoton(BotonEstilo boton) {
+		boton.setPreferredSize(new Dimension(ANCHO_BOTON_VICTORIA,
 				boton.getPreferredSize().height));
 		boton.setMaximumSize(boton.getPreferredSize());
 		return boton;
 	}
 
-	private JPanel centrado(Component componente) {
-		JPanel envoltorio = new JPanel();
-		envoltorio.setOpaque(false);
-		envoltorio.setLayout(new BoxLayout(envoltorio, BoxLayout.X_AXIS));
-		envoltorio.add(Box.createHorizontalGlue());
-		envoltorio.add(componente);
-		envoltorio.add(Box.createHorizontalGlue());
-		return envoltorio;
-	}
-
-	private static JLabel etiqueta(String texto, int tamano, boolean negrita) {
-		return etiqueta(texto, tamano, negrita, null);
-	}
-
-	private static JLabel etiqueta(String texto, int tamano, boolean negrita, String nombre) {
-		JLabel etiqueta = new JLabel(texto, SwingConstants.CENTER);
+	private static JLabel crearEtiqueta(String texto, int estilo, int tamano, String nombre) {
+		JLabel etiqueta = Tema.etiqueta(texto, estilo, tamano, Tema.TINTA);
+		etiqueta.setHorizontalAlignment(SwingConstants.CENTER);
 		etiqueta.setName(nombre);
-		etiqueta.setFont(Tema.fuente(tamano, negrita));
-		etiqueta.setForeground(Tema.TINTA);
 		return etiqueta;
 	}
 
@@ -133,13 +143,13 @@ final class CapaVictoria extends JPanel {
 		}
 
 		private void pintarTarjeta(Graphics2D dibujo) {
-			dibujo.setColor(Tema.conTransparencia(Tema.TINTA, Tema.TRANSPARENCIA_SOMBRA));
-			dibujo.fill(Tema.redondeado(Tema.SOMBRA_VICTORIA / 2.0f,
-					Tema.SOMBRA_VICTORIA, getWidth() - Tema.SOMBRA_VICTORIA,
-					getHeight() - Tema.SOMBRA_VICTORIA, Tema.RADIO_TABLERO));
-			dibujo.setColor(Tema.TARJETA);
-			dibujo.fill(Tema.redondeado(0, 0, getWidth() - Tema.SOMBRA_VICTORIA,
-					getHeight() - Tema.SOMBRA_VICTORIA, Tema.RADIO_TABLERO));
+			int ancho = getWidth() - SOMBRA_VICTORIA;
+			int alto = getHeight() - SOMBRA_VICTORIA;
+			dibujo.setColor(Tema.conTransparencia(Tema.TINTA, TRANSPARENCIA_SOMBRA));
+			dibujo.fill(Tema.redondeado(SOMBRA_VICTORIA / 2.0f, SOMBRA_VICTORIA,
+					ancho, alto, Tema.RADIO_TABLERO));
+			Tema.pintarCajaRedondeada(dibujo, 0, 0, ancho, alto,
+					Tema.RADIO_TABLERO, Tema.TARJETA, null, 0);
 		}
 	}
 }

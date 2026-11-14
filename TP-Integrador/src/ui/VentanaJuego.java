@@ -5,6 +5,7 @@ import java.awt.Dimension;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -16,7 +17,6 @@ import events.EventBus;
 import events.Evento;
 import events.TipoEvento;
 import model.Dificultad;
-import model.EstadoJuego;
 import model.ModoJuego;
 import network.GestorRed;
 import utils.Constantes;
@@ -24,39 +24,49 @@ import utils.Constantes;
 public final class VentanaJuego implements AutoCloseable {
 	private static final String CONFIGURACION = "configuracion";
 	private static final String JUEGO = "juego";
-	private static final String PROXIMAMENTE = "proximamente";
+	private static final String MULTIJUGADOR = "multijugador";
+	private static final int PUERTO_MAXIMO = 65535;
 
-	private MotorJuego motorActual;
-	private EventBus busActual;
+	private final AtomicLong intentoConexion = new AtomicLong();
+	private final Object lockConexion = new Object();
+	private volatile MotorJuego motorActual;
+	private volatile EventBus busActual;
+	private volatile Dificultad dificultadActual = Dificultad.MEDIA;
 	private ModoJuego modoActual = ModoJuego.UN_JUGADOR;
-	private ModoJuego modoAnterior = ModoJuego.UN_JUGADOR;
-	private Dificultad dificultadActual = Dificultad.MEDIA;
+	private String pantallaActual = CONFIGURACION;
 
 	private final JFrame ventana = crearVentana();
 	private final CardLayout tarjetas = new CardLayout();
 	private final JPanel contenido = new JPanel(tarjetas);
-	private final PanelConfiguracion configuracion = new PanelConfiguracion(this::iniciar, this::seleccionarModo);
-	private final PanelProximamente proximamente = new PanelProximamente(this::iniciarHost, this::iniciarCliente, this::restaurarMenu);
-	private final PanelJuego juego = new PanelJuego(
-			direccion -> publicarEvento(new Evento(TipoEvento.MOVIMIENTO, direccion)),
-			() -> publicarEvento(new Evento(TipoEvento.DESHACER)),
-			() -> publicarEvento(new Evento(TipoEvento.REINICIAR)),
-			this::menu);
+	private final PanelConfiguracion configuracion = new PanelConfiguracion(
+			this::iniciar, this::seleccionarModo);
+	private final PanelMultijugador multijugador = new PanelMultijugador(
+			this::iniciarHost, this::iniciarCliente, this::restaurarMenu);
+	private final PanelJuego juego = crearPanelJuego();
 	private final CapaVictoria victoria = new CapaVictoria(
 			() -> publicarEvento(new Evento(TipoEvento.INICIAR, dificultadActual)),
 			this::menu);
 
 	public VentanaJuego() {
-		contenido.add(configuracion.componente(), CONFIGURACION);
-		contenido.add(proximamente.componente(), PROXIMAMENTE);
-		contenido.add(juego.componente(), JUEGO);
+		contenido.add(configuracion, CONFIGURACION);
+		contenido.add(multijugador, MULTIJUGADOR);
+		contenido.add(juego, JUEGO);
 		configurarVentana();
+	}
+
+	private PanelJuego crearPanelJuego() {
+		return new PanelJuego(
+				direccion -> publicarEvento(new Evento(TipoEvento.MOVIMIENTO, direccion)),
+				() -> publicarEvento(new Evento(TipoEvento.DESHACER)),
+				() -> publicarEvento(new Evento(TipoEvento.REINICIAR)),
+				this::menu);
 	}
 
 	private static JFrame crearVentana() {
 		if (!SwingUtilities.isEventDispatchThread()) {
 			throw new IllegalStateException("La ventana debe crearse en el EDT.");
 		}
+		Tema.aplicarDefaultsSwing();
 		return new JFrame("Zip");
 	}
 
@@ -64,10 +74,15 @@ public final class VentanaJuego implements AutoCloseable {
 		ventana.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 		ventana.setContentPane(contenido);
 		ventana.setGlassPane(victoria);
-		ventana.setMinimumSize(new Dimension(Tema.ANCHO_MINIMO_VENTANA, Tema.ALTO_MINIMO_VENTANA));
-		ventana.setPreferredSize(new Dimension(Tema.ANCHO_VENTANA, Tema.ALTO_VENTANA));
+		Dimension tamano = new Dimension(Tema.ANCHO_VENTANA, Tema.ALTO_VENTANA);
+		ventana.setMinimumSize(tamano);
+		ventana.setPreferredSize(tamano);
 		ventana.pack();
 		ventana.setLocationRelativeTo(null);
+		agregarCierreVentana();
+	}
+
+	private void agregarCierreVentana() {
 		ventana.addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosing(WindowEvent evento) {
@@ -77,145 +92,184 @@ public final class VentanaJuego implements AutoCloseable {
 	}
 
 	private void iniciar(Controles controles, Dificultad dificultad) {
-		victoria.ocultarSuperposicion();
-		abandonar();
+		long intento = prepararPartida(ModoJuego.UN_JUGADOR, dificultad, controles);
 		configuracion.ocupado(true);
-		this.dificultadActual = dificultad;
-		juego.controles(controles);
-
-		try {
-			EventBus bus = new EventBus();
-			this.busActual = bus;
-			int rondas = configuracion.rondasSeleccionadas();
-			MotorJuego motor = new MotorJuego(Constantes.ROL_LOCAL, Constantes.IP_LOCAL, Constantes.PUERTO, rondas, bus, this::recibir);
-			this.motorActual = motor;
-			motor.iniciar();
-			bus.publicar(new Evento(TipoEvento.INICIAR, dificultad));
-		} catch (IOException e) {
-			configuracion.error("No se pudo iniciar el juego: " + e.getMessage());
-		}
+		arrancarMotor(Constantes.ROL_LOCAL, Constantes.IP_LOCAL, Constantes.PUERTO,
+				configuracion.cantidadRondas(), intento, "No se pudo iniciar el juego: ");
 	}
 
 	private void iniciarHost() {
-		victoria.ocultarSuperposicion();
-		abandonar();
-		this.dificultadActual = configuracion.dificultadSeleccionada();
-		int rondas = configuracion.rondasSeleccionadas();
-		juego.controles(configuracion.controlesSeleccionados());
-		proximamente.ocupado(true);
-		proximamente.mostrarEstado("Esperando rival en puerto " + Constantes.PUERTO + " (Rondas: " + rondas + ")...");
-
-		new Thread(() -> {
-			try {
-				EventBus bus = new EventBus();
-				MotorJuego motor = new MotorJuego(Constantes.ROL_HOST, Constantes.IP_LOCAL, Constantes.PUERTO, rondas, bus, this::recibir);
-				this.busActual = bus;
-				this.motorActual = motor;
-				motor.iniciar();
-				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
-			} catch (IOException e) {
-				SwingUtilities.invokeLater(() -> {
-					proximamente.ocupado(false);
-					proximamente.mostrarError("Espera cancelada o error: " + e.getMessage());
-				});
-			}
-		}, "Thread-Conexion-Host").start();
+		int rondas = configuracion.cantidadRondas();
+		String estado = "Esperando rival en puerto " + Constantes.PUERTO
+				+ " (Rondas: " + rondas + ")...";
+		iniciarEnRed(Constantes.ROL_HOST, Constantes.IP_LOCAL, Constantes.PUERTO,
+				estado, "Thread-Conexion-Host", "Espera cancelada o error: ");
 	}
 
 	private void iniciarCliente() {
-		String defecto = Constantes.IP_LOCAL + ":" + Constantes.PUERTO;
-		String entrada = JOptionPane.showInputDialog(
-				ventana,
-				"Ingresá la dirección del Host (IP o IP:puerto):",
-				defecto);
-		if (entrada == null || entrada.trim().isEmpty()) {
+		DestinoRed destino = solicitarDestinoCliente();
+		if (destino == null) {
 			return;
 		}
-		entrada = entrada.trim();
-		if (entrada.startsWith("tcp://")) {
-			entrada = entrada.substring("tcp://".length());
-		}
+		String estado = "Conectando a " + destino.host() + ":" + destino.puerto() + "...";
+		iniciarEnRed(Constantes.ROL_CLIENTE, destino.host(), destino.puerto(),
+				estado, "Thread-Conexion-Cliente", "Error al conectar con host: ");
+	}
 
-		String host = Constantes.IP_LOCAL;
-		int puerto = Constantes.PUERTO;
-		if (entrada.contains(":")) {
-			String[] partes = entrada.split(":", 2);
-			host = partes[0].trim();
-			try {
-				puerto = Integer.parseInt(partes[1].trim());
-			} catch (NumberFormatException e) {
-				JOptionPane.showMessageDialog(ventana, "Puerto inválido: " + partes[1], "Error", JOptionPane.ERROR_MESSAGE);
-				return;
+	private DestinoRed solicitarDestinoCliente() {
+		String defecto = Constantes.IP_LOCAL + ":" + Constantes.PUERTO;
+		String entrada = JOptionPane.showInputDialog(ventana,
+				"Ingresá la dirección del Host (IP o IP:puerto):", defecto);
+		if (entrada == null || entrada.trim().isEmpty()) {
+			return null;
+		}
+		return parsearDestino(entrada.trim());
+	}
+
+	private DestinoRed parsearDestino(String entrada) {
+		String limpio = entrada.startsWith("tcp://")
+				? entrada.substring("tcp://".length()) : entrada;
+		if (!limpio.contains(":")) {
+			return new DestinoRed(limpio, Constantes.PUERTO);
+		}
+		String[] partes = limpio.split(":", 2);
+		String host = partes[0].trim().isEmpty() ? Constantes.IP_LOCAL : partes[0].trim();
+		return parsearPuerto(host, partes[1].trim());
+	}
+
+	private DestinoRed parsearPuerto(String host, String textoPuerto) {
+		try {
+			int puerto = Integer.parseInt(textoPuerto);
+			if (puerto >= 1 && puerto <= PUERTO_MAXIMO) {
+				return new DestinoRed(host, puerto);
 			}
-		} else {
-			host = entrada;
+		} catch (NumberFormatException ignored) {
 		}
+		JOptionPane.showMessageDialog(ventana, "Puerto inválido: " + textoPuerto,
+				"Error", JOptionPane.ERROR_MESSAGE);
+		return null;
+	}
 
-		final String destinoHost = host;
-		final int destinoPuerto = puerto;
+	private void iniciarEnRed(int rol, String host, int puerto, String estadoInicial,
+			String nombreHilo, String prefijoError) {
+		long intento = prepararPartida(ModoJuego.MULTIJUGADOR,
+				configuracion.dificultadSeleccionada(), configuracion.controlesSeleccionados());
+		int rondas = configuracion.cantidadRondas();
+		multijugador.ocupado(true);
+		multijugador.estado(estadoInicial);
+		new Thread(() -> arrancarMotor(rol, host, puerto, rondas, intento, prefijoError),
+				nombreHilo).start();
+	}
 
+	private long prepararPartida(ModoJuego modo, Dificultad dificultad, Controles controles) {
 		victoria.ocultarSuperposicion();
 		abandonar();
-		this.dificultadActual = configuracion.dificultadSeleccionada();
-		int rondas = configuracion.rondasSeleccionadas();
-		juego.controles(configuracion.controlesSeleccionados());
-		proximamente.ocupado(true);
-		proximamente.mostrarEstado("Conectando a " + destinoHost + ":" + destinoPuerto + "...");
+		this.modoActual = modo;
+		this.dificultadActual = dificultad;
+		juego.controles(controles);
+		return intentoConexion.get();
+	}
 
-		new Thread(() -> {
-			try {
-				EventBus bus = new EventBus();
-				MotorJuego motor = new MotorJuego(Constantes.ROL_CLIENTE, destinoHost, destinoPuerto, rondas, bus, this::recibir);
+	private void arrancarMotor(int rol, String host, int puerto, int rondas,
+			long intento, String prefijoError) {
+		try {
+			EventBus bus = new EventBus();
+			MotorJuego motor = new MotorJuego(rol, host, puerto, rondas, bus,
+					actualizacion -> recibir(intento, actualizacion));
+			registrarMotor(bus, motor, intento);
+		} catch (IOException e) {
+			reportarErrorConexion(intento, rol, prefijoError + e.getMessage());
+		}
+	}
+
+	private void registrarMotor(EventBus bus, MotorJuego motor, long intento) {
+		boolean aceptado = false;
+		synchronized (lockConexion) {
+			if (intento == intentoConexion.get()) {
 				this.busActual = bus;
 				this.motorActual = motor;
 				motor.iniciar();
 				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
-			} catch (IOException e) {
-				SwingUtilities.invokeLater(() -> {
-					proximamente.ocupado(false);
-					proximamente.mostrarError("Error al conectar con host: " + e.getMessage());
-				});
+				aceptado = true;
 			}
-		}, "Thread-Conexion-Cliente").start();
+		}
+		if (!aceptado) {
+			motor.finalizar();
+		}
+	}
+
+	private void reportarErrorConexion(long intento, int rol, String mensaje) {
+		SwingUtilities.invokeLater(() -> {
+			if (intento != intentoConexion.get()) {
+				return;
+			}
+			if (rol == Constantes.ROL_LOCAL) {
+				configuracion.error(mensaje);
+			} else {
+				multijugador.ocupado(false);
+				multijugador.error(mensaje);
+			}
+		});
 	}
 
 	private void seleccionarModo(ModoJuego modo) {
+		this.modoActual = modo;
 		if (modo == ModoJuego.UN_JUGADOR) {
-			modoActual = modo;
 			return;
 		}
-		modoAnterior = modoActual;
-		proximamente.resetear();
-		tarjetas.show(contenido, PROXIMAMENTE);
+		resetearMultijugador();
+		mostrarPantalla(MULTIJUGADOR);
 	}
 
 	private void restaurarMenu() {
 		abandonar();
-		modoActual = modoAnterior;
+		modoActual = ModoJuego.UN_JUGADOR;
 		configuracion.seleccionarModo(modoActual);
-		tarjetas.show(contenido, CONFIGURACION);
+		mostrarPantalla(CONFIGURACION);
 	}
 
-	private void recibir(ActualizacionVista actualizacion) {
-		if (actualizacion.estadoJuego() == null) {
-			menu();
-			configuracion.error(actualizacion.mensaje());
+	private void recibir(long intento, ActualizacionVista actualizacion) {
+		if (intento != intentoConexion.get()) {
 			return;
 		}
-		configuracion.ocupado(false);
-		proximamente.ocupado(false);
+		if (actualizacion.estadoJuego() == null) {
+			manejarErrorSinTablero(actualizacion.mensaje());
+			return;
+		}
+		mostrarEnJuego(actualizacion);
+	}
+
+	private void mostrarEnJuego(ActualizacionVista actualizacion) {
+		boolean entrandoAlJuego = !JUEGO.equals(pantallaActual);
+		if (entrandoAlJuego) {
+			configuracion.ocupado(false);
+			multijugador.ocupado(false);
+			mostrarPantalla(JUEGO);
+		}
 		juego.mostrar(actualizacion);
 		actualizarVictoria(actualizacion);
-		boolean primeraVisualizacion = !juego.componente().isShowing();
-		tarjetas.show(contenido, JUEGO);
-		if (primeraVisualizacion) {
+		if (entrandoAlJuego) {
 			juego.enfocarEntrada();
 		}
 	}
 
+	private void manejarErrorSinTablero(String mensaje) {
+		if (modoActual == ModoJuego.MULTIJUGADOR) {
+			victoria.ocultarSuperposicion();
+			abandonar();
+			multijugador.ocupado(false);
+			multijugador.error(mensaje);
+			mostrarPantalla(MULTIJUGADOR);
+			return;
+		}
+		menu();
+		configuracion.error(mensaje);
+	}
+
 	private void publicarEvento(Evento evento) {
-		if (busActual != null) {
-			busActual.publicar(evento);
+		EventBus bus = busActual;
+		if (bus != null) {
+			bus.publicar(evento);
 		}
 	}
 
@@ -223,32 +277,49 @@ public final class VentanaJuego implements AutoCloseable {
 		victoria.ocultarSuperposicion();
 		abandonar();
 		configuracion.ocupado(false);
-		proximamente.resetear();
+		resetearMultijugador();
 		modoActual = ModoJuego.UN_JUGADOR;
 		configuracion.seleccionarModo(modoActual);
-		tarjetas.show(contenido, CONFIGURACION);
+		mostrarPantalla(CONFIGURACION);
+	}
+
+	private void resetearMultijugador() {
+		multijugador.ocupado(false);
+		multijugador.estado(" ");
+	}
+
+	private void mostrarPantalla(String pantalla) {
+		if (!pantalla.equals(pantallaActual)) {
+			tarjetas.show(contenido, pantalla);
+			pantallaActual = pantalla;
+		}
 	}
 
 	private void abandonar() {
+		intentoConexion.incrementAndGet();
 		GestorRed.cancelarEsperaServidor();
-		if (motorActual != null) {
-			motorActual.finalizar();
+		MotorJuego motorCerrar;
+		synchronized (lockConexion) {
+			motorCerrar = motorActual;
 			motorActual = null;
+			busActual = null;
 		}
-		busActual = null;
+		if (motorCerrar != null) {
+			motorCerrar.finalizar();
+		}
 	}
 
 	private void actualizarVictoria(ActualizacionVista act) {
-		if (act.partidaFinalizada()) {
-			if (act.ganoLocal()) {
-				victoria.mostrarFinPartida("¡VICTORIA!",
-						"Ganaste la partida final (" + act.rondasLocal() + " a " + act.rondasRival() + ")");
-			} else {
-				victoria.mostrarFinPartida("¡DERROTA!",
-						"El rival ganó la partida final (" + act.rondasLocal() + " a " + act.rondasRival() + ")");
-			}
-		} else {
+		if (!act.partidaFinalizada()) {
 			victoria.ocultarSuperposicion();
+			return;
+		}
+		if (act.ganoLocal()) {
+			victoria.mostrarFinPartida("¡VICTORIA!",
+					"Ganaste la partida final (" + act.rondasLocal() + " a " + act.rondasRival() + ")");
+		} else {
+			victoria.mostrarFinPartida("¡DERROTA!",
+					"El rival ganó la partida final (" + act.rondasLocal() + " a " + act.rondasRival() + ")");
 		}
 	}
 
@@ -264,5 +335,8 @@ public final class VentanaJuego implements AutoCloseable {
 	public void close() {
 		abandonar();
 		ventana.dispose();
+	}
+
+	private record DestinoRed(String host, int puerto) {
 	}
 }

@@ -3,6 +3,9 @@ package ui;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
@@ -10,57 +13,79 @@ import java.util.function.Consumer;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.JRootPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import controller.ActualizacionVista;
 import model.Direccion;
 import model.EstadoJuego;
 
-final class PanelJuego {
-	private final JPanel panel = new JPanel(new BorderLayout(0, Tema.SEPARACION_JUEGO));
+final class PanelJuego extends JPanel {
+	private static final long serialVersionUID = 1L;
+	private static final int RELLENO_HORIZONTAL_JUEGO = 40;
+	private static final int TAMANO_TITULO_JUEGO = 28;
+	private static final float ESPACIADO_TITULO_JUEGO = 0.14f;
+	private static final int ANCHO_VOLVER_FANTASMA = 172;
+	private static final int ALTO_INDICADOR = 58;
+	private static final int RELLENO_HORIZONTAL_INDICADOR = 16;
+	private static final int RELLENO_VERTICAL_INDICADOR = 10;
+	private static final int TAMANO_ETIQUETA_INDICADOR = 13;
+	private static final int TAMANO_VALOR_INDICADOR = 20;
+	private static final int ALTO_PROGRESO = 8;
+	private static final int RADIO_PROGRESO = 4;
+	private static final int ANCHO_BOTON_SECUNDARIO = 170;
+	private static final int ANCHO_TECLA_BACKSPACE = 88;
+	private static final int PROGRESO_MAXIMO = 100;
+
 	private final PanelTablero tablero = new PanelTablero();
-	private final IndicadorInformacion celdas = new IndicadorInformacion("Celdas", "progreso");
-	private final IndicadorInformacion siguiente = new IndicadorInformacion("Próximo número", "siguiente");
-	private final BarraProgreso progreso = new BarraProgreso();
-	private final JLabel estadoMensaje = etiqueta(" ", Tema.TAMANO_ESTADO, Tema.TINTA_SUAVE);
-	private final JPanel teclasAyuda = horizontal();
-	private final BotonSecundario deshacer = new BotonSecundario("Deshacer", TipoIcono.DESHACER);
-	private final BotonSecundario reiniciar = new BotonSecundario("Reiniciar", TipoIcono.REINICIAR);
-	private final Consumer<Direccion> mover;
-	private final Runnable accionDeshacer;
+	private final ChipInformacion celdas = new ChipInformacion("Celdas", "progreso");
+	private final ChipInformacion siguiente = new ChipInformacion("Próximo número", "siguiente");
+	private final BarraProgresoJuego progreso = new BarraProgresoJuego();
+	private final JLabel estadoMensaje = Tema.etiqueta(" ", Font.PLAIN,
+			Tema.TAMANO_ESTADO, Tema.TINTA_SUAVE);
+	private final JPanel teclasAyuda = Tema.panelHorizontal();
+	private final BotonEstilo deshacer = BotonEstilo.secundario("Deshacer", TipoIcono.DESHACER);
+	private final BotonEstilo reiniciar = BotonEstilo.secundario("Reiniciar", TipoIcono.REINICIAR);
+	private final transient Consumer<Direccion> mover;
+	private Controles controlesActuales;
 	private boolean jugando;
 
 	PanelJuego(Consumer<Direccion> mover, Runnable accionDeshacer,
 			Runnable accionReiniciar, Runnable volver) {
+		super(new BorderLayout(0, Tema.SEPARACION_GRANDE));
 		this.mover = mover;
-		this.accionDeshacer = accionDeshacer;
-		configurarPanel();
-		panel.add(encabezado(volver), BorderLayout.NORTH);
-		panel.add(tablero, BorderLayout.CENTER);
-		panel.add(pie(accionReiniciar), BorderLayout.SOUTH);
+		configurarPanel(accionDeshacer, accionReiniciar);
+		add(encabezado(volver), BorderLayout.NORTH);
+		add(tablero, BorderLayout.CENTER);
+		add(pie(), BorderLayout.SOUTH);
 	}
 
-	private void configurarPanel() {
+	private void configurarPanel(Runnable accionDeshacer, Runnable accionReiniciar) {
 		tablero.setFocusable(true);
-		panel.setName("juego");
-		panel.setBackground(Tema.FONDO);
-		panel.setBorder(BorderFactory.createEmptyBorder(Tema.RELLENO_VERTICAL_JUEGO,
-				Tema.RELLENO_HORIZONTAL_JUEGO, Tema.RELLENO_VERTICAL_JUEGO,
-				Tema.RELLENO_HORIZONTAL_JUEGO));
+		setName("juego");
+		setBackground(Tema.FONDO);
+		setBorder(BorderFactory.createEmptyBorder(Tema.MARGEN_PANEL_JUEGO,
+				RELLENO_HORIZONTAL_JUEGO, Tema.MARGEN_PANEL_JUEGO, RELLENO_HORIZONTAL_JUEGO));
 		estadoMensaje.setName("estado-mensaje");
-		deshacer.setName("deshacer");
-		reiniciar.setName("reiniciar");
-		deshacer.agregarEscucha(evento -> accionDeshacer.run());
+		configurarBoton(deshacer, "deshacer", accionDeshacer);
+		configurarBoton(reiniciar, "reiniciar", accionReiniciar);
+	}
+
+	private void configurarBoton(BotonEstilo boton, String nombre, Runnable accion) {
+		boton.setName(nombre);
+		boton.setFocusable(false);
+		boton.addActionListener(evento -> accion.run());
 	}
 
 	private JPanel encabezado(Runnable accionVolver) {
-		JPanel encabezado = vertical();
+		JPanel encabezado = Tema.panelVertical();
 		encabezado.add(barraSuperior(accionVolver));
-		encabezado.add(Box.createVerticalStrut(Tema.SEPARACION_RESUMEN));
+		encabezado.add(Box.createVerticalStrut(Tema.SEPARACION_MEDIA));
 		encabezado.add(chips());
 		encabezado.add(Box.createVerticalStrut(Tema.SEPARACION_ENCABEZADO));
 		encabezado.add(progreso);
@@ -71,60 +96,70 @@ final class PanelJuego {
 		JPanel barra = new JPanel(new BorderLayout());
 		barra.setOpaque(false);
 		barra.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel titulo = etiqueta("ZIP", Tema.TAMANO_TITULO_JUEGO, Tema.TINTA);
-		titulo.setFont(Tema.fuenteConEspaciado(Tema.TAMANO_TITULO_JUEGO, true,
-				Tema.ESPACIADO_TITULO_JUEGO));
-		BotonFantasma volver = new BotonFantasma("Desconectar / Menú", true);
-		volver.setName("volver");
-		volver.setPreferredSize(new Dimension(Tema.ANCHO_VOLVER_FANTASMA + 60, Tema.ALTO_FANTASMA));
-		volver.agregarEscucha(evento -> accionVolver.run());
+		JLabel titulo = Tema.etiqueta("ZIP", Font.BOLD, TAMANO_TITULO_JUEGO, Tema.TINTA);
+		titulo.setFont(Tema.fuenteConEspaciado(TAMANO_TITULO_JUEGO, true,
+				ESPACIADO_TITULO_JUEGO));
 		barra.add(titulo, BorderLayout.WEST);
-		barra.add(volver, BorderLayout.EAST);
+		barra.add(crearBotonVolver(accionVolver), BorderLayout.EAST);
 		return barra;
 	}
 
+	private BotonEstilo crearBotonVolver(Runnable accionVolver) {
+		BotonEstilo volver = BotonEstilo.fantasma("Desconectar / Menú",
+				TipoIcono.FLECHA_IZQUIERDA);
+		configurarBoton(volver, "volver", accionVolver);
+		int ancho = Math.max(ANCHO_VOLVER_FANTASMA, volver.getPreferredSize().width);
+		volver.setPreferredSize(new Dimension(ancho, Tema.ALTO_FANTASMA));
+		return volver;
+	}
+
 	private JPanel chips() {
-		JPanel chips = new JPanel(new GridLayout(1, 2, Tema.SEPARACION_INDICADORES, 0));
+		JPanel chips = new JPanel(new GridLayout(1, 2, Tema.SEPARACION_MEDIA, 0));
 		chips.setOpaque(false);
 		chips.setAlignmentX(Component.LEFT_ALIGNMENT);
 		chips.add(celdas);
 		chips.add(siguiente);
-		chips.setMaximumSize(new Dimension(Integer.MAX_VALUE, Tema.ALTO_INDICADOR));
+		chips.setMaximumSize(new Dimension(Integer.MAX_VALUE, ALTO_INDICADOR));
 		return chips;
 	}
 
-	private JPanel pie(Runnable accionReiniciar) {
-		JPanel pie = vertical();
-		reiniciar.agregarEscucha(evento -> accionReiniciar.run());
-		pie.add(centrado(teclasAyuda));
-		pie.add(Box.createVerticalStrut(Tema.SEPARACION_AYUDA));
-		pie.add(centrado(etiqueta("Conectá los números en orden y recorré todas las celdas.",
-				Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE)));
+	private JPanel pie() {
+		JPanel pie = Tema.panelVertical();
+		pie.add(Tema.centrar(teclasAyuda));
+		pie.add(Box.createVerticalStrut(Tema.SEPARACION_ENCABEZADO));
+		pie.add(Tema.centrar(Tema.etiqueta(
+				"Conectá los números en orden y recorré todas las celdas.",
+				Font.PLAIN, Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE)));
 		pie.add(Box.createVerticalStrut(Tema.DESPLAZAMIENTO_FOCO));
-		pie.add(centrado(estadoMensaje));
-		pie.add(Box.createVerticalStrut(Tema.SEPARACION_RESUMEN));
-		pie.add(centrado(acciones()));
+		pie.add(Tema.centrar(estadoMensaje));
+		pie.add(Box.createVerticalStrut(Tema.SEPARACION_MEDIA));
+		pie.add(Tema.centrar(acciones()));
 		return pie;
 	}
 
 	private JPanel acciones() {
-		JPanel acciones = horizontal();
-		Dimension boton = new Dimension(Tema.ANCHO_BOTON_SECUNDARIO, Tema.ALTO_SECUNDARIO);
+		JPanel acciones = Tema.panelHorizontal();
+		Dimension boton = new Dimension(ANCHO_BOTON_SECUNDARIO, Tema.ALTO_SECUNDARIO);
 		deshacer.setPreferredSize(boton);
 		reiniciar.setPreferredSize(boton);
 		acciones.add(deshacer);
-		acciones.add(Box.createHorizontalStrut(Tema.SEPARACION_ACCIONES));
+		acciones.add(Box.createHorizontalStrut(Tema.SEPARACION_MEDIA));
 		acciones.add(reiniciar);
 		return acciones;
 	}
 
 	void controles(Controles controles) {
-		panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
-		panel.getActionMap().clear();
-		for (Direccion direccion : Direccion.values()) {
-			vincular("mover-" + direccion, controles.tecla(direccion), () -> mover(direccion));
+		if (controles == controlesActuales) {
+			return;
 		}
-		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::hacerClic);
+		this.controlesActuales = controles;
+		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
+		getActionMap().clear();
+		for (Direccion direccion : Direccion.values()) {
+			vincular("mover-" + direccion, controles.tecla(direccion),
+					() -> mover(direccion));
+		}
+		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::doClick);
 		reconstruirAyuda(controles);
 	}
 
@@ -132,16 +167,17 @@ final class PanelJuego {
 		teclasAyuda.removeAll();
 		teclasAyuda.add(teclasDireccion(controles));
 		teclasAyuda.add(Box.createHorizontalStrut(Tema.SEPARACION_TARJETAS));
-		teclasAyuda.add(new TeclaVisual("Backspace",
-				Tema.ANCHO_TECLA_BACKSPACE, Tema.TAMANO_TECLA_JUEGO));
+		teclasAyuda.add(new TeclaVisual("Backspace", ANCHO_TECLA_BACKSPACE,
+				Tema.TAMANO_TECLA_JUEGO));
 		teclasAyuda.add(Box.createHorizontalStrut(Tema.SEPARACION_TECLAS));
-		teclasAyuda.add(etiqueta("= deshacer", Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE));
+		teclasAyuda.add(Tema.etiqueta("= deshacer", Font.PLAIN,
+				Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE));
 		teclasAyuda.revalidate();
 		teclasAyuda.repaint();
 	}
 
 	private JPanel teclasDireccion(Controles controles) {
-		JPanel teclas = horizontal();
+		JPanel teclas = Tema.panelHorizontal();
 		JComponent[] valores = teclasJuego(controles);
 		for (int indice = 0; indice < valores.length; indice++) {
 			if (indice > 0) {
@@ -154,17 +190,18 @@ final class PanelJuego {
 
 	private JComponent[] teclasJuego(Controles controles) {
 		if (controles == Controles.FLECHAS) {
-			return new JComponent[] {teclaJuego(TipoIcono.FLECHA_ARRIBA), teclaJuego(TipoIcono.FLECHA_IZQUIERDA),
-				teclaJuego(TipoIcono.FLECHA_ABAJO), teclaJuego(TipoIcono.FLECHA_DERECHA)};
+			return new JComponent[] {
+				new TeclaVisual(TipoIcono.FLECHA_ARRIBA, Tema.TAMANO_TECLA_JUEGO),
+				new TeclaVisual(TipoIcono.FLECHA_IZQUIERDA, Tema.TAMANO_TECLA_JUEGO),
+				new TeclaVisual(TipoIcono.FLECHA_ABAJO, Tema.TAMANO_TECLA_JUEGO),
+				new TeclaVisual(TipoIcono.FLECHA_DERECHA, Tema.TAMANO_TECLA_JUEGO)
+			};
 		}
-		return new JComponent[] {teclaJuego("W"), teclaJuego("A"), teclaJuego("S"), teclaJuego("D")};
+		return new JComponent[] {teclaLetra("W"), teclaLetra("A"),
+			teclaLetra("S"), teclaLetra("D")};
 	}
 
-	private JComponent teclaJuego(TipoIcono icono) {
-		return new TeclaVisual(icono, Tema.TAMANO_TECLA_JUEGO);
-	}
-
-	private JComponent teclaJuego(String texto) {
+	private JComponent teclaLetra(String texto) {
 		return new TeclaVisual(texto, Tema.TAMANO_TECLA_JUEGO, Tema.TAMANO_TECLA_JUEGO);
 	}
 
@@ -175,84 +212,132 @@ final class PanelJuego {
 	}
 
 	private void vincular(String nombre, int tecla, Runnable accion) {
-		panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
 				.put(KeyStroke.getKeyStroke(tecla, 0), nombre);
-		panel.getActionMap().put(nombre, new AbstractAction() {
+		getActionMap().put(nombre, new AbstractAction() {
+			private static final long serialVersionUID = 1L;
+
 			@Override
 			public void actionPerformed(ActionEvent evento) {
-				accion.run();
+				if (entradaHabilitada()) {
+					accion.run();
+				}
 			}
 		});
 	}
 
+	private boolean entradaHabilitada() {
+		JRootPane raiz = SwingUtilities.getRootPane(this);
+		return raiz == null || raiz.getGlassPane() == null
+				|| !raiz.getGlassPane().isVisible();
+	}
+
 	void mostrar(ActualizacionVista act) {
 		EstadoJuego estadoJuego = act.estadoJuego();
-		if (estadoJuego == null) {
-			mensaje(act.mensaje());
-			return;
-		}
 		jugando = !act.partidaFinalizada() && !estadoJuego.gano();
 		tablero.mostrar(estadoJuego, act.manchadoPorTomate());
-		celdas.establecerValor(estadoJuego.visitadas() + "/" + estadoJuego.nivel().cantidadCeldas());
-		String textoSiguiente = estadoJuego.gano()
-				? "Completado" : Integer.toString(estadoJuego.proximoNumero());
-		if (act.rondasObjetivo() > 1) {
-			textoSiguiente += " · " + act.rondasLocal() + "-" + act.rondasRival() + " (" + act.rondasObjetivo() + ")";
-		}
-		siguiente.establecerValor(textoSiguiente);
-		progreso.establecerValor((double) estadoJuego.visitadas()
-				/ estadoJuego.nivel().cantidadCeldas());
+		celdas.establecerValor(estadoJuego.visitadas() + "/"
+				+ estadoJuego.nivel().cantidadCeldas());
+		siguiente.establecerValor(textoSiguiente(act, estadoJuego));
+		progreso.setValue(calcularPorcentaje(estadoJuego));
 		deshacer.setEnabled(jugando && estadoJuego.visitadas() > 1);
-		mensaje(act.mensaje());
+		estadoMensaje.setText(act.mensaje());
 	}
 
-	void mostrar(EstadoJuego estadoJuego, String mensaje, boolean manchadoPorTomate) {
-		mostrar(new ActualizacionVista(estadoJuego, mensaje, manchadoPorTomate));
+	private String textoSiguiente(ActualizacionVista act, EstadoJuego estadoJuego) {
+		String texto = estadoJuego.gano() ? "Completado"
+				: Integer.toString(estadoJuego.proximoNumero());
+		if (act.rondasObjetivo() > 1) {
+			texto += " · " + act.rondasLocal() + "-" + act.rondasRival()
+					+ " (" + act.rondasObjetivo() + ")";
+		}
+		return texto;
 	}
 
-	void mostrar(EstadoJuego estadoJuego, String mensaje) {
-		mostrar(estadoJuego, mensaje, false);
-	}
-
-	void mensaje(String mensaje) {
-		estadoMensaje.setText(mensaje);
-	}
-
-	JPanel componente() {
-		return panel;
+	private int calcularPorcentaje(EstadoJuego estadoJuego) {
+		return (int) Math.round(PROGRESO_MAXIMO
+				* (double) estadoJuego.visitadas() / estadoJuego.nivel().cantidadCeldas());
 	}
 
 	void enfocarEntrada() {
 		tablero.requestFocusInWindow();
 	}
 
-	private static JPanel vertical() {
-		JPanel panel = new JPanel();
-		panel.setOpaque(false);
-		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		return panel;
+	private static final class ChipInformacion extends JPanel {
+		private static final long serialVersionUID = 1L;
+		private final JLabel valor;
+
+		ChipInformacion(String titulo, String nombreValor) {
+			super(new BorderLayout(Tema.SEPARACION_CHICA, 0));
+			this.valor = crearValor(nombreValor);
+			setOpaque(false);
+			setBorder(BorderFactory.createEmptyBorder(RELLENO_VERTICAL_INDICADOR,
+					RELLENO_HORIZONTAL_INDICADOR, RELLENO_VERTICAL_INDICADOR,
+					RELLENO_HORIZONTAL_INDICADOR));
+			setPreferredSize(new Dimension(0, ALTO_INDICADOR));
+			add(Tema.etiqueta(titulo, Font.PLAIN, TAMANO_ETIQUETA_INDICADOR,
+					Tema.TINTA_SUAVE), BorderLayout.WEST);
+			add(valor, BorderLayout.EAST);
+		}
+
+		private static JLabel crearValor(String nombreValor) {
+			JLabel etiqueta = Tema.etiqueta("", Font.BOLD, TAMANO_VALOR_INDICADOR,
+					Tema.TINTA);
+			etiqueta.setName(nombreValor);
+			etiqueta.setHorizontalAlignment(SwingConstants.RIGHT);
+			return etiqueta;
+		}
+
+		void establecerValor(String texto) {
+			valor.setText(texto);
+		}
+
+		@Override
+		protected void paintComponent(Graphics graficos) {
+			Graphics2D dibujo = (Graphics2D) graficos.create();
+			try {
+				Tema.preparar(dibujo);
+				Tema.pintarCajaRedondeada(dibujo, 0, 0, getWidth(), getHeight(),
+						Tema.RADIO_MEDIO, Tema.TARJETA, Tema.BORDE, Tema.GROSOR_BORDE);
+			} finally {
+				dibujo.dispose();
+			}
+			super.paintComponent(graficos);
+		}
 	}
 
-	private static JPanel horizontal() {
-		JPanel panel = new JPanel();
-		panel.setOpaque(false);
-		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
-		return panel;
-	}
+	private static final class BarraProgresoJuego extends JProgressBar {
+		private static final long serialVersionUID = 1L;
 
-	private static JPanel centrado(Component componente) {
-		JPanel envoltorio = horizontal();
-		envoltorio.add(Box.createHorizontalGlue());
-		envoltorio.add(componente);
-		envoltorio.add(Box.createHorizontalGlue());
-		return envoltorio;
-	}
+		BarraProgresoJuego() {
+			super(0, PROGRESO_MAXIMO);
+			setOpaque(false);
+			setBorderPainted(false);
+			setPreferredSize(new Dimension(0, ALTO_PROGRESO));
+			setMaximumSize(new Dimension(Integer.MAX_VALUE, ALTO_PROGRESO));
+			setAlignmentX(Component.LEFT_ALIGNMENT);
+		}
 
-	private static JLabel etiqueta(String texto, int tamano, java.awt.Color color) {
-		JLabel etiqueta = new JLabel(texto, SwingConstants.LEFT);
-		etiqueta.setFont(Tema.fuente(tamano, false));
-		etiqueta.setForeground(color);
-		return etiqueta;
+		@Override
+		protected void paintComponent(Graphics graficos) {
+			Graphics2D dibujo = (Graphics2D) graficos.create();
+			try {
+				pintarBarra(dibujo);
+			} finally {
+				dibujo.dispose();
+			}
+		}
+
+		private void pintarBarra(Graphics2D dibujo) {
+			Tema.preparar(dibujo);
+			int arco = RADIO_PROGRESO * 2;
+			Tema.pintarCajaRedondeada(dibujo, 0, 0, getWidth(), getHeight(),
+					arco, Tema.BORDE, null, 0);
+			int ancho = (int) Math.round(getWidth() * getPercentComplete());
+			if (ancho > 0) {
+				Tema.pintarCajaRedondeada(dibujo, 0, 0, ancho, getHeight(),
+						arco, Tema.ACENTO, null, 0);
+			}
+		}
 	}
 }
