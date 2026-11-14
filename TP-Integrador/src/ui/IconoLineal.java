@@ -1,17 +1,16 @@
 package ui;
 
-import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.Dimension;
+import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
-import javax.swing.JComponent;
+import java.util.function.Supplier;
+import javax.swing.Icon;
 
-final class IconoLineal extends JComponent {
-	private static final long serialVersionUID = 1L;
+final class IconoLineal implements Icon {
 	private static final double CIRCULO_COMPLETO = 360;
 	private static final float INICIO_REINICIO = 40;
 	private static final float EXTENSION_REINICIO = 285;
@@ -51,40 +50,50 @@ final class IconoLineal extends JComponent {
 	private static final float EXTERIOR_ENGRANAJE = 0.28f;
 	private static final float INTERIOR_ENGRANAJE = 0.1f;
 	private static final float DIENTE_ENGRANAJE = 0.4f;
+
 	private final TipoIcono tipo;
-	private Color color;
+	private final int tamano;
+	private Supplier<Color> proveedorColor;
 
 	IconoLineal(TipoIcono tipo, int tamano, Color color) {
+		this(tipo, tamano, () -> color);
+	}
+
+	IconoLineal(TipoIcono tipo, int tamano, Supplier<Color> proveedorColor) {
 		this.tipo = tipo;
-		this.color = color;
-		Dimension dimension = new Dimension(tamano, tamano);
-		setPreferredSize(dimension);
-		setMinimumSize(dimension);
-		setMaximumSize(dimension);
-		setOpaque(false);
+		this.tamano = tamano;
+		this.proveedorColor = proveedorColor;
 	}
 
 	void establecerColor(Color color) {
-		this.color = color;
-		repaint();
+		this.proveedorColor = () -> color;
 	}
 
 	@Override
-	protected void paintComponent(Graphics graficos) {
+	public void paintIcon(Component componente, Graphics graficos, int x, int y) {
 		Graphics2D dibujo = (Graphics2D) graficos.create();
 		try {
 			Tema.preparar(dibujo);
-			pintar(dibujo, tipo, 0, 0, Math.min(getWidth(), getHeight()), color);
+			pintar(dibujo, tipo, x, y, tamano, proveedorColor.get());
 		} finally {
 			dibujo.dispose();
 		}
 	}
 
+	@Override
+	public int getIconWidth() {
+		return tamano;
+	}
+
+	@Override
+	public int getIconHeight() {
+		return tamano;
+	}
+
 	static void pintar(Graphics2D dibujo, TipoIcono tipo, float x, float y,
 			float tamano, Color color) {
 		dibujo.setColor(color);
-		dibujo.setStroke(new BasicStroke(Tema.GROSOR_ICONO,
-				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+		dibujo.setStroke(Tema.trazo(Tema.GROSOR_ICONO));
 		switch (tipo) {
 			case PERSONA -> pintarPersona(dibujo, x, y, tamano);
 			case PERSONAS -> pintarPersonas(dibujo, x, y, tamano);
@@ -112,24 +121,30 @@ final class IconoLineal extends JComponent {
 	private static void pintarPersonas(Graphics2D dibujo, float x, float y, float tamano) {
 		float persona = tamano * ESCALA_PERSONAS;
 		Graphics2D copia = (Graphics2D) dibujo.create();
-		copia.translate(tamano * IZQUIERDA_PERSONA, 0);
-		pintarPersona(copia, x, y, persona);
-		copia.dispose();
+		try {
+			copia.translate(tamano * IZQUIERDA_PERSONA, 0);
+			pintarPersona(copia, x, y, persona);
+		} finally {
+			copia.dispose();
+		}
 		pintarPersona(dibujo, x, y + tamano * DESPLAZAMIENTO_Y_PERSONAS, persona);
 	}
 
 	private static void pintarFlecha(Graphics2D dibujo, TipoIcono tipo,
 			float x, float y, float tamano) {
 		Graphics2D rotado = (Graphics2D) dibujo.create();
-		rotado.rotate(rotacion(tipo), x + tamano / 2, y + tamano / 2);
-		Path2D flecha = new Path2D.Float();
-		flecha.moveTo(x + tamano * CENTRO, y + tamano * SUPERIOR_FLECHA);
-		flecha.lineTo(x + tamano * CENTRO, y + tamano * INFERIOR_FLECHA);
-		flecha.moveTo(x + tamano * FLECHA_IZQUIERDA, y + tamano * HOMBRO_FLECHA);
-		flecha.lineTo(x + tamano * CENTRO, y + tamano * SUPERIOR_FLECHA);
-		flecha.lineTo(x + tamano * FLECHA_DERECHA, y + tamano * HOMBRO_FLECHA);
-		rotado.draw(flecha);
-		rotado.dispose();
+		try {
+			rotado.rotate(rotacion(tipo), x + tamano / 2, y + tamano / 2);
+			Path2D flecha = new Path2D.Float();
+			flecha.moveTo(x + tamano * CENTRO, y + tamano * SUPERIOR_FLECHA);
+			flecha.lineTo(x + tamano * CENTRO, y + tamano * INFERIOR_FLECHA);
+			flecha.moveTo(x + tamano * FLECHA_IZQUIERDA, y + tamano * HOMBRO_FLECHA);
+			flecha.lineTo(x + tamano * CENTRO, y + tamano * SUPERIOR_FLECHA);
+			flecha.lineTo(x + tamano * FLECHA_DERECHA, y + tamano * HOMBRO_FLECHA);
+			rotado.draw(flecha);
+		} finally {
+			rotado.dispose();
+		}
 	}
 
 	private static double rotacion(TipoIcono tipo) {

@@ -1,6 +1,7 @@
 package ui;
 
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -42,12 +43,11 @@ final class TeclaVisual extends JComponent {
 	}
 
 	private void pintarTecla(Graphics2D dibujo) {
-		float alto = getHeight() - Tema.ALTO_SOMBRA;
-		dibujo.setColor(Tema.TINTA);
-		dibujo.fill(Tema.redondeado(0, Tema.ALTO_SOMBRA, getWidth(), alto,
-				Tema.RADIO_TECLA));
-		Tema.rellenarBorde(dibujo, 0, 0, getWidth(), alto, Tema.RADIO_TECLA,
-				Tema.TINTA, Tema.TARJETA);
+		int alto = getHeight() - Tema.ALTO_SOMBRA;
+		Tema.pintarCajaRedondeada(dibujo, 0, Tema.ALTO_SOMBRA, getWidth(), alto,
+				Tema.RADIO_TECLA, Tema.TINTA, null, 0);
+		Tema.pintarCajaRedondeada(dibujo, 0, 0, getWidth(), alto,
+				Tema.RADIO_TECLA, Tema.TARJETA, Tema.TINTA, Tema.GROSOR_BORDE);
 	}
 
 	private void pintarEtiqueta(Graphics2D dibujo) {
@@ -58,7 +58,7 @@ final class TeclaVisual extends JComponent {
 					(altoVisual - tamanoIcono) / 2, tamanoIcono, Tema.TINTA);
 			return;
 		}
-		dibujo.setFont(Tema.fuente(Tema.TAMANO_TEXTO_TECLA, true));
+		dibujo.setFont(Tema.fuente(Font.BOLD, Tema.TAMANO_TEXTO_TECLA));
 		dibujo.setColor(Tema.TINTA);
 		FontMetrics metricas = dibujo.getFontMetrics();
 		float x = (getWidth() - metricas.stringWidth(texto)) / 2.0f;
