@@ -30,6 +30,8 @@ final class Tema {
 	static final Color TRAZO_LINEA = conTransparencia(ACENTO, TRANSPARENCIA_TRAZO);
 	static final Color FOCO = ACENTO;
 	static final Color ERROR = new Color(0xA43535);
+	static final float TRANSPARENCIA_RECORTE = 0.22f;
+	static final Color RECORTE_CELDA = conTransparencia(ERROR, TRANSPARENCIA_RECORTE);
 	static final Color SUPERPOSICION = TINTA;
 	static final Color SOMBRA_TARJETA = TINTA;
 	static final Color HALO = ACENTO;

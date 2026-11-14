@@ -3,12 +3,13 @@ package ui;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 import model.Celda;
 import model.Direccion;
 import model.EstadoJuego;
 
 /** Trazo provisional dibujado con el mouse sobre un estado de origen. */
-final class TrazoMouse {
+final class TrazoMouse implements GestoMouse {
 	private static final String ORIGEN_NULO = "El origen no puede ser nulo.";
 	private static final String DIRECCION_INVALIDA = "Las celdas consecutivas no son adyacentes.";
 
@@ -19,11 +20,13 @@ final class TrazoMouse {
 		this.origen = Objects.requireNonNull(origen, ORIGEN_NULO);
 	}
 
-	EstadoJuego origen() {
+	@Override
+	public EstadoJuego origen() {
 		return origen;
 	}
 
-	boolean extenderHacia(Celda destino) {
+	@Override
+	public boolean extenderHacia(Celda destino) {
 		if (destino.equals(origen.actual())) {
 			return vaciarTrazo();
 		}
@@ -32,6 +35,21 @@ final class TrazoMouse {
 			return truncarEn(indice + 1);
 		}
 		return avanzarHacia(destino);
+	}
+
+	@Override
+	public boolean tieneCambios() {
+		return !trazo.isEmpty();
+	}
+
+	@Override
+	public void mostrarEn(PanelTablero tablero) {
+		tablero.mostrarTrazo(celdas());
+	}
+
+	@Override
+	public void confirmar(Consumer<Direccion> mover, Runnable deshacer) {
+		direcciones().forEach(mover);
 	}
 
 	List<Celda> celdas() {

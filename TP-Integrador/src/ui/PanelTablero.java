@@ -21,6 +21,8 @@ final class PanelTablero extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private transient Optional<EstadoJuego> estado = Optional.empty();
 	private transient List<Celda> trazo = List.of();
+	private transient Optional<EstadoJuego> vistaPrevia = Optional.empty();
+	private transient List<Celda> recortadas = List.of();
 	private boolean manchadoPorTomate;
 
 	PanelTablero() {
@@ -56,8 +58,18 @@ final class PanelTablero extends JPanel {
 		repaint();
 	}
 
+	/** Muestra cómo quedaría el camino tras deshacer las celdas recortadas. */
+	void mostrarRecorte(EstadoJuego vistaPrevia, List<Celda> recortadas) {
+		this.vistaPrevia = Optional.of(vistaPrevia);
+		this.recortadas = List.copyOf(recortadas);
+		repaint();
+	}
+
+	/** Quita cualquier vista previa de mouse (trazo o recorte). */
 	void limpiarTrazo() {
 		trazo = List.of();
+		vistaPrevia = Optional.empty();
+		recortadas = List.of();
 		repaint();
 	}
 
@@ -80,8 +92,9 @@ final class PanelTablero extends JPanel {
 		}
 	}
 
+	/** Estado a dibujar: la vista previa del recorte si la hay, si no el estado real. */
 	private EstadoJuego estadoJuego() {
-		return estado.orElseThrow();
+		return vistaPrevia.orElseGet(estado::orElseThrow);
 	}
 
 	private Geometria geometria() {
@@ -107,7 +120,16 @@ final class PanelTablero extends JPanel {
 		dibujarRecorrido(dibujo, grilla);
 		dibujarActual(dibujo, grilla);
 		dibujarTrazo(dibujo, grilla);
+		dibujarRecortadas(dibujo, grilla);
 		dibujarNumeros(dibujo, grilla);
+	}
+
+	private void dibujarRecortadas(Graphics2D dibujo, Geometria grilla) {
+		dibujo.setColor(Tema.RECORTE_CELDA);
+		for (Celda celda : recortadas) {
+			dibujo.fill(Tema.redondeado(grilla.x(celda), grilla.y(celda), grilla.celda(),
+					grilla.celda(), Tema.RADIO_CELDA));
+		}
 	}
 
 	private void dibujarCeldas(Graphics2D dibujo, Geometria grilla, Set<Celda> visitadas) {
