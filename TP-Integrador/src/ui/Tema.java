@@ -25,13 +25,8 @@ final class Tema {
 	static final Color ACENTO_SUAVE = new Color(0xE1E5F8);
 	static final Color FONDO_TABLERO = new Color(0xDDE1F5);
 	static final Color VISITADA = new Color(0xDAD7FB);
-	static final float TRANSPARENCIA_TRAZO = 0.55f;
-	static final Color TRAZO_CELDA = new Color(0xECEAFD);
-	static final Color TRAZO_LINEA = conTransparencia(ACENTO, TRANSPARENCIA_TRAZO);
 	static final Color FOCO = ACENTO;
 	static final Color ERROR = new Color(0xA43535);
-	static final float TRANSPARENCIA_RECORTE = 0.22f;
-	static final Color RECORTE_CELDA = conTransparencia(ERROR, TRANSPARENCIA_RECORTE);
 	static final Color SUPERPOSICION = TINTA;
 	static final Color SOMBRA_TARJETA = TINTA;
 	static final Color HALO = ACENTO;

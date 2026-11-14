@@ -1,124 +1,122 @@
 package ui;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import model.Celda;
 import model.Direccion;
 import model.EstadoJuego;
+import model.Nivel;
 
-/** Trazo provisional dibujado con el mouse sobre un estado de origen. */
-final class TrazoMouse implements GestoMouse {
-	private static final String ORIGEN_NULO = "El origen no puede ser nulo.";
+/**
+ * Copia local del camino que el mouse va moviendo.
+ *
+ * <p>Cada paso hacia adelante publica un movimiento y cada paso hacia atrás publica un
+ * deshacer, en el momento. Se lleva una copia propia porque el estado que devuelve el motor
+ * llega con atraso: el historial permite reconocer esos estados atrasados y distinguirlos de un
+ * cambio externo.
+ */
+final class TrazoMouse {
+	private static final String ESTADO_NULO = "El estado no puede ser nulo.";
 	private static final String DIRECCION_INVALIDA = "Las celdas consecutivas no son adyacentes.";
 
-	private final EstadoJuego origen;
-	private final List<Celda> trazo = new ArrayList<>();
+	private final Nivel nivel;
+	private final List<Celda> recorrido;
+	private final Set<List<Celda>> historial = new HashSet<>();
+	private final Consumer<Direccion> mover;
+	private final Runnable deshacer;
 
-	TrazoMouse(EstadoJuego origen) {
-		this.origen = Objects.requireNonNull(origen, ORIGEN_NULO);
+	TrazoMouse(EstadoJuego estado, Consumer<Direccion> mover, Runnable deshacer) {
+		Objects.requireNonNull(estado, ESTADO_NULO);
+		this.nivel = estado.nivel();
+		this.recorrido = new ArrayList<>(estado.recorrido());
+		this.mover = mover;
+		this.deshacer = deshacer;
+		registrar();
 	}
 
-	@Override
-	public EstadoJuego origen() {
-		return origen;
+	/** True si el estado es este camino o uno por el que ya pasó y el motor todavía no alcanzó. */
+	boolean conoce(EstadoJuego estado) {
+		return estado.nivel() == nivel && historial.contains(estado.recorrido());
 	}
 
-	@Override
-	public boolean extenderHacia(Celda destino) {
-		if (destino.equals(origen.actual())) {
-			return vaciarTrazo();
-		}
-		int indice = trazo.indexOf(destino);
+	boolean contiene(Celda celda) {
+		return recorrido.contains(celda);
+	}
+
+	List<Celda> recorrido() {
+		return List.copyOf(recorrido);
+	}
+
+	/** Retrocede si el destino ya es parte del camino; si no, avanza en línea recta hacia él. */
+	void llevarHacia(Celda destino) {
+		int indice = recorrido.indexOf(destino);
 		if (indice >= 0) {
-			return truncarEn(indice + 1);
+			retrocederHasta(indice);
+		} else {
+			avanzarHacia(destino);
 		}
-		return avanzarHacia(destino);
 	}
 
-	@Override
-	public boolean tieneCambios() {
-		return !trazo.isEmpty();
-	}
-
-	@Override
-	public void mostrarEn(PanelTablero tablero) {
-		tablero.mostrarTrazo(celdas());
-	}
-
-	@Override
-	public void confirmar(Consumer<Direccion> mover, Runnable deshacer) {
-		direcciones().forEach(mover);
-	}
-
-	List<Celda> celdas() {
-		return List.copyOf(trazo);
-	}
-
-	List<Direccion> direcciones() {
-		List<Direccion> direcciones = new ArrayList<>();
-		Celda anterior = origen.actual();
-		for (Celda celda : trazo) {
-			direcciones.add(direccionEntre(anterior, celda));
-			anterior = celda;
+	private void retrocederHasta(int indice) {
+		while (recorrido.size() - 1 > indice && puedeDeshacer()) {
+			recorrido.remove(recorrido.size() - 1);
+			registrar();
+			deshacer.run();
 		}
-		return List.copyOf(direcciones);
 	}
 
-	private boolean vaciarTrazo() {
-		boolean cambio = !trazo.isEmpty();
-		trazo.clear();
-		return cambio;
+	/** Mismas condiciones que el modelo: no se deshace el inicio ni un tablero completo. */
+	private boolean puedeDeshacer() {
+		return recorrido.size() > 1 && recorrido.size() < nivel.cantidadCeldas();
 	}
 
-	private boolean truncarEn(int cantidad) {
-		if (cantidad >= trazo.size()) {
-			return false;
-		}
-		trazo.subList(cantidad, trazo.size()).clear();
-		return true;
-	}
-
-	private boolean avanzarHacia(Celda destino) {
+	private void avanzarHacia(Celda destino) {
 		if (!mismaLinea(punta(), destino)) {
-			return false;
+			return;
 		}
-		int cantidadInicial = trazo.size();
 		while (!punta().equals(destino)) {
 			Celda siguiente = pasoHacia(punta(), destino);
 			if (!esPasoValido(siguiente)) {
-				break;
+				return;
 			}
-			trazo.add(siguiente);
+			Direccion direccion = direccionEntre(punta(), siguiente);
+			recorrido.add(siguiente);
+			registrar();
+			mover.accept(direccion);
 		}
-		return trazo.size() > cantidadInicial;
 	}
 
 	private Celda punta() {
-		return trazo.isEmpty() ? origen.actual() : trazo.get(trazo.size() - 1);
+		return recorrido.get(recorrido.size() - 1);
 	}
 
-	private static boolean mismaLinea(Celda a, Celda b) {
-		return a.fila() == b.fila() || a.columna() == b.columna();
+	private void registrar() {
+		historial.add(List.copyOf(recorrido));
+	}
+
+	private boolean esPasoValido(Celda siguiente) {
+		List<Celda> candidato = new ArrayList<>(recorrido);
+		candidato.add(siguiente);
+		try {
+			new EstadoJuego(nivel, candidato);
+			return true;
+		} catch (IllegalArgumentException e) {
+			return false;
+		}
+	}
+
+	private static boolean mismaLinea(Celda una, Celda otra) {
+		return una.fila() == otra.fila() || una.columna() == otra.columna();
 	}
 
 	private static Celda pasoHacia(Celda desde, Celda hasta) {
 		return new Celda(
 				desde.fila() + Integer.signum(hasta.fila() - desde.fila()),
 				desde.columna() + Integer.signum(hasta.columna() - desde.columna()));
-	}
-
-	private boolean esPasoValido(Celda siguiente) {
-		List<Celda> candidato = new ArrayList<>(origen.recorrido());
-		candidato.addAll(trazo);
-		candidato.add(siguiente);
-		try {
-			new EstadoJuego(origen.nivel(), candidato);
-			return true;
-		} catch (IllegalArgumentException e) {
-			return false;
-		}
 	}
 
 	private static Direccion direccionEntre(Celda desde, Celda hasta) {

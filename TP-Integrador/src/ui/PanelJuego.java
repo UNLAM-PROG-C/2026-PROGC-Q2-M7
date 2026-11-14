@@ -21,10 +21,8 @@ import model.Direccion;
 import model.EstadoJuego;
 
 final class PanelJuego {
-	private static final String AYUDA_MOUSE = "Arrastrá desde el punto y soltá";
-	private static final String AYUDA_DESHACER = "= deshacer";
-	private static final String AYUDA_DESHACER_MOUSE = "= deshacer · + click en el camino: volver";
-	private static final String DESHACER = "deshacer";
+	private static final String AYUDA_MOUSE =
+			"Arrastrá desde el punto · volvé sobre el camino para deshacer";
 	private final JPanel panel = new JPanel(new BorderLayout(0, Tema.SEPARACION_JUEGO));
 	private final PanelTablero tablero = new PanelTablero();
 	private final IndicadorInformacion celdas = new IndicadorInformacion("Celdas", "progreso");
@@ -61,7 +59,10 @@ final class PanelJuego {
 		estadoMensaje.setName("estado-mensaje");
 		deshacer.setName("deshacer");
 		reiniciar.setName("reiniciar");
-		deshacer.agregarEscucha(evento -> accionDeshacer.run());
+		deshacer.agregarEscucha(evento -> {
+			adaptadorMouse.descartar();
+			accionDeshacer.run();
+		});
 	}
 
 	private JPanel encabezado(Runnable accionVolver) {
@@ -102,7 +103,10 @@ final class PanelJuego {
 
 	private JPanel pie(Runnable accionReiniciar) {
 		JPanel pie = vertical();
-		reiniciar.agregarEscucha(evento -> accionReiniciar.run());
+		reiniciar.agregarEscucha(evento -> {
+			adaptadorMouse.descartar();
+			accionReiniciar.run();
+		});
 		pie.add(centrado(teclasAyuda));
 		pie.add(Box.createVerticalStrut(Tema.SEPARACION_AYUDA));
 		pie.add(centrado(etiqueta("Conectá los números en orden y recorré todas las celdas.",
@@ -131,33 +135,9 @@ final class PanelJuego {
 		if (!controles.usaMouse()) {
 			vincularDirecciones(controles);
 		}
-		if (controles.usaMouse()) {
-			vincularBorrarMouse();
-		} else {
-			vincular(DESHACER, KeyEvent.VK_BACK_SPACE, deshacer::hacerClic);
-		}
+		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::hacerClic);
 		adaptadorMouse.habilitar(controles.usaMouse());
 		reconstruirAyuda(controles);
-	}
-
-	/** En modo mouse Backspace es modificador: con click edita, sola deshace un paso al soltarla. */
-	private void vincularBorrarMouse() {
-		vincular(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0, false), DESHACER,
-				adaptadorMouse::presionarBorrar);
-		vincular(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0, true), DESHACER + "-soltar",
-				this::soltarBorrar);
-	}
-
-	private void soltarBorrar() {
-		if (!adaptadorMouse.soltarBorrar()) {
-			deshacer.hacerClic();
-		}
-	}
-
-	private void deshacerPaso() {
-		if (jugando) {
-			accionDeshacer.run();
-		}
 	}
 
 	private void vincularDirecciones(Controles controles) {
@@ -173,8 +153,7 @@ final class PanelJuego {
 		teclasAyuda.add(new TeclaVisual("Backspace",
 				Tema.ANCHO_TECLA_BACKSPACE, Tema.TAMANO_TECLA_JUEGO));
 		teclasAyuda.add(Box.createHorizontalStrut(Tema.SEPARACION_TECLAS));
-		String deshacerAyuda = controles.usaMouse() ? AYUDA_DESHACER_MOUSE : AYUDA_DESHACER;
-		teclasAyuda.add(etiqueta(deshacerAyuda, Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE));
+		teclasAyuda.add(etiqueta("= deshacer", Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE));
 		teclasAyuda.revalidate();
 		teclasAyuda.repaint();
 	}
@@ -217,12 +196,15 @@ final class PanelJuego {
 		}
 	}
 
-	private void vincular(String nombre, int tecla, Runnable accion) {
-		vincular(KeyStroke.getKeyStroke(tecla, 0), nombre, accion);
+	private void deshacerPaso() {
+		if (jugando) {
+			accionDeshacer.run();
+		}
 	}
 
-	private void vincular(KeyStroke tecla, String nombre, Runnable accion) {
-		panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(tecla, nombre);
+	private void vincular(String nombre, int tecla, Runnable accion) {
+		panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+				.put(KeyStroke.getKeyStroke(tecla, 0), nombre);
 		panel.getActionMap().put(nombre, new AbstractAction() {
 			@Override
 			public void actionPerformed(ActionEvent evento) {
