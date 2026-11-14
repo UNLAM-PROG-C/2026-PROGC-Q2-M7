@@ -7,6 +7,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
@@ -40,11 +41,46 @@ final class TarjetaOpcion<T> extends JToggleButton {
 	}
 
 	@Override
+	public void paint(Graphics graficos) {
+		if (isEnabled() || getWidth() <= 0 || getHeight() <= 0) {
+			super.paint(graficos);
+			return;
+		}
+		Graphics2D dibujo = (Graphics2D) graficos.create();
+		try {
+			pintarDeshabilitado(dibujo);
+		} finally {
+			dibujo.dispose();
+		}
+	}
+
+	private void pintarDeshabilitado(Graphics2D dibujo) {
+		double escala = Math.max(1.0, dibujo.getDeviceConfiguration()
+				.getDefaultTransform().getScaleX());
+		BufferedImage capa = renderizarCapa(escala);
+		Tema.aplicarEstadoHabilitado(dibujo, false);
+		dibujo.drawImage(capa, 0, 0, getWidth(), getHeight(), null);
+	}
+
+	private BufferedImage renderizarCapa(double escala) {
+		int ancho = Math.max(1, (int) Math.ceil(getWidth() * escala));
+		int alto = Math.max(1, (int) Math.ceil(getHeight() * escala));
+		BufferedImage capa = new BufferedImage(ancho, alto, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D lienzo = capa.createGraphics();
+		try {
+			lienzo.scale(escala, escala);
+			super.paint(lienzo);
+		} finally {
+			lienzo.dispose();
+		}
+		return capa;
+	}
+
+	@Override
 	protected void paintComponent(Graphics graficos) {
 		Graphics2D dibujo = (Graphics2D) graficos.create();
 		try {
 			Tema.preparar(dibujo);
-			Tema.aplicarEstadoHabilitado(dibujo, isEnabled());
 			pintarTarjeta(dibujo);
 			pintarRadio(dibujo);
 			pintarFoco(dibujo);
@@ -104,7 +140,7 @@ final class TarjetaOpcion<T> extends JToggleButton {
 	}
 
 	private void pintarFoco(Graphics2D dibujo) {
-		if (hasFocus()) {
+		if (hasFocus() && isEnabled()) {
 			Tema.pintarFoco(dibujo, Tema.DESPLAZAMIENTO_FOCO, Tema.DESPLAZAMIENTO_FOCO,
 					getWidth() - 2.0f * Tema.DESPLAZAMIENTO_FOCO,
 					getHeight() - 2.0f * Tema.DESPLAZAMIENTO_FOCO, Tema.RADIO_GRANDE);

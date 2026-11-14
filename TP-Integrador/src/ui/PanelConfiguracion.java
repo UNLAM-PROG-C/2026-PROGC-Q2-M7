@@ -49,7 +49,6 @@ final class PanelConfiguracion extends JPanel {
 	private final BotonEstilo jugar = BotonEstilo.principal("Jugar");
 	private final transient Consumer<ModoJuego> alCambiarModo;
 
-	private ModoJuego modoSeleccionadoActual = ModoJuego.UN_JUGADOR;
 	private Controles controlesSeleccionados = Controles.FLECHAS;
 	private Dificultad dificultadSeleccionada = Dificultad.MEDIA;
 
@@ -62,13 +61,8 @@ final class PanelConfiguracion extends JPanel {
 	}
 
 	void seleccionarModo(ModoJuego modo) {
-		modoSeleccionadoActual = modo;
 		modos.get(modo).setSelected(true);
 		actualizarResumen();
-	}
-
-	ModoJuego modoSeleccionado() {
-		return modoSeleccionadoActual;
 	}
 
 	Controles controlesSeleccionados() {
@@ -170,7 +164,7 @@ final class PanelConfiguracion extends JPanel {
 	}
 
 	private void aplicarEstadoInicial() {
-		modos.get(modoSeleccionadoActual).setSelected(true);
+		modos.get(ModoJuego.UN_JUGADOR).setSelected(true);
 		controles.get(controlesSeleccionados).setSelected(true);
 		dificultades.get(dificultadSeleccionada).setSelected(true);
 		actualizarEtiquetaRondas();
@@ -180,7 +174,7 @@ final class PanelConfiguracion extends JPanel {
 	private JPanel encabezado() {
 		JPanel encabezado = Tema.panelVertical();
 		JLabel titulo = Tema.etiqueta("ZIP", Font.BOLD, TAMANO_TITULO_MENU, Tema.TINTA);
-		titulo.setFont(Tema.fuenteConEspaciado(TAMANO_TITULO_MENU, true, ESPACIADO_TITULO));
+		titulo.setFont(Tema.fuenteConEspaciado(Font.BOLD, TAMANO_TITULO_MENU, ESPACIADO_TITULO));
 		JLabel subtitulo = Tema.etiqueta("Conectá los números. Completá el tablero.",
 				Font.PLAIN, TAMANO_SUBTITULO_MENU, Tema.TINTA_SUAVE);
 		encabezado.add(titulo);
@@ -192,7 +186,7 @@ final class PanelConfiguracion extends JPanel {
 	private JPanel seccion(String titulo, JPanel contenido) {
 		JPanel seccion = Tema.panelVertical();
 		JLabel etiqueta = Tema.etiqueta(titulo, Font.BOLD, Tema.TAMANO_TITULO_SECCION, Tema.TINTA_SUAVE);
-		etiqueta.setFont(Tema.fuenteConEspaciado(Tema.TAMANO_TITULO_SECCION, true, Tema.ESPACIADO_SECCION));
+		etiqueta.setFont(Tema.fuenteConEspaciado(Font.BOLD, Tema.TAMANO_TITULO_SECCION, Tema.ESPACIADO_SECCION));
 		seccion.add(etiqueta);
 		seccion.add(Box.createVerticalStrut(Tema.SEPARACION_MEDIA));
 		seccion.add(contenido);
@@ -350,7 +344,6 @@ final class PanelConfiguracion extends JPanel {
 	}
 
 	private void elegirModo(ModoJuego modo) {
-		modoSeleccionadoActual = modo;
 		actualizarResumen();
 		alCambiarModo.accept(modo);
 	}

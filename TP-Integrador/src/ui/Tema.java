@@ -108,7 +108,6 @@ final class Tema {
 	static final float TRANSPARENCIA_DESHABILITADO = 0.45f;
 	static final float TRANSPARENCIA_HALO = 0.18f;
 
-	private static final Color FOCO = ACENTO;
 	private static final int RELLENO_VERTICAL_INSIGNIA = 8;
 	private static final int RELLENO_HORIZONTAL_INSIGNIA = 14;
 	private static final int RADIO_INSIGNIA = 18;
@@ -135,18 +134,13 @@ final class Tema {
 		UIManager.put("Button.defaultButtonFollowsFocus", Boolean.TRUE);
 	}
 
-	static Font fuente(float tamano, boolean negrita) {
-		return fuente(negrita ? Font.BOLD : Font.PLAIN, tamano);
-	}
-
 	static Font fuente(int estilo, float tamano) {
 		return CACHE_FUENTES.computeIfAbsent(new ClaveFuente(estilo, tamano, 0f), clave ->
 				new Font(FAMILIA_FUENTE, clave.estilo(), Math.round(clave.tamano()))
 						.deriveFont(clave.tamano()));
 	}
 
-	static Font fuenteConEspaciado(float tamano, boolean negrita, float espaciado) {
-		int estilo = negrita ? Font.BOLD : Font.PLAIN;
+	static Font fuenteConEspaciado(int estilo, float tamano, float espaciado) {
 		return CACHE_FUENTES.computeIfAbsent(new ClaveFuente(estilo, tamano, espaciado), clave -> {
 			Font base = fuente(clave.estilo(), clave.tamano());
 			Map<TextAttribute, Object> atributos = new HashMap<>(base.getAttributes());
@@ -193,7 +187,7 @@ final class Tema {
 
 	static JLabel etiquetaPastilla(String texto) {
 		JLabel insignia = new EtiquetaPastillaInterna(texto);
-		insignia.setFont(fuenteConEspaciado(TAMANO_TITULO_SECCION, true, ESPACIADO_SECCION));
+		insignia.setFont(fuenteConEspaciado(Font.BOLD, TAMANO_TITULO_SECCION, ESPACIADO_SECCION));
 		insignia.setBorder(BorderFactory.createEmptyBorder(RELLENO_VERTICAL_INSIGNIA,
 				RELLENO_HORIZONTAL_INSIGNIA, RELLENO_VERTICAL_INSIGNIA,
 				RELLENO_HORIZONTAL_INSIGNIA));
@@ -232,7 +226,7 @@ final class Tema {
 
 	static void pintarFoco(Graphics2D dibujo, float x, float y, float ancho,
 			float alto, float radio) {
-		dibujo.setColor(FOCO);
+		dibujo.setColor(ACENTO);
 		dibujo.setStroke(trazo(GROSOR_FOCO));
 		dibujo.draw(redondeado(x, y, ancho, alto, radio));
 	}

@@ -7,7 +7,6 @@ import java.awt.Graphics2D;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
-import java.util.function.Supplier;
 import javax.swing.Icon;
 
 final class IconoLineal implements Icon {
@@ -53,20 +52,16 @@ final class IconoLineal implements Icon {
 
 	private final TipoIcono tipo;
 	private final int tamano;
-	private Supplier<Color> proveedorColor;
+	private Color color;
 
 	IconoLineal(TipoIcono tipo, int tamano, Color color) {
-		this(tipo, tamano, () -> color);
-	}
-
-	IconoLineal(TipoIcono tipo, int tamano, Supplier<Color> proveedorColor) {
 		this.tipo = tipo;
 		this.tamano = tamano;
-		this.proveedorColor = proveedorColor;
+		this.color = color;
 	}
 
 	void establecerColor(Color color) {
-		this.proveedorColor = () -> color;
+		this.color = color;
 	}
 
 	@Override
@@ -74,7 +69,7 @@ final class IconoLineal implements Icon {
 		Graphics2D dibujo = (Graphics2D) graficos.create();
 		try {
 			Tema.preparar(dibujo);
-			pintar(dibujo, tipo, x, y, tamano, proveedorColor.get());
+			pintar(dibujo, tipo, x, y, tamano, color);
 		} finally {
 			dibujo.dispose();
 		}

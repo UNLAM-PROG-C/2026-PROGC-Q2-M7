@@ -39,7 +39,7 @@ final class PanelJuego extends JPanel {
 	private static final int ALTO_PROGRESO = 8;
 	private static final int RADIO_PROGRESO = 4;
 	private static final int ANCHO_BOTON_SECUNDARIO = 170;
-	private static final int ANCHO_TECLA_BACKSPACE = 88;
+	private static final int ANCHO_TECLA_BACKSPACE = 104;
 	private static final int PROGRESO_MAXIMO = 100;
 
 	private final PanelTablero tablero = new PanelTablero();
@@ -63,6 +63,7 @@ final class PanelJuego extends JPanel {
 		add(encabezado(volver), BorderLayout.NORTH);
 		add(tablero, BorderLayout.CENTER);
 		add(pie(), BorderLayout.SOUTH);
+		controles(Controles.FLECHAS);
 	}
 
 	private void configurarPanel(Runnable accionDeshacer, Runnable accionReiniciar) {
@@ -72,13 +73,20 @@ final class PanelJuego extends JPanel {
 		setBorder(BorderFactory.createEmptyBorder(Tema.MARGEN_PANEL_JUEGO,
 				RELLENO_HORIZONTAL_JUEGO, Tema.MARGEN_PANEL_JUEGO, RELLENO_HORIZONTAL_JUEGO));
 		estadoMensaje.setName("estado-mensaje");
-		configurarBoton(deshacer, "deshacer", accionDeshacer);
-		configurarBoton(reiniciar, "reiniciar", accionReiniciar);
+		configurarBoton(deshacer, "deshacer", accionEnJuego(accionDeshacer));
+		configurarBoton(reiniciar, "reiniciar", accionEnJuego(accionReiniciar));
+	}
+
+	private Runnable accionEnJuego(Runnable accion) {
+		return () -> {
+			accion.run();
+			enfocarEntrada();
+		};
 	}
 
 	private void configurarBoton(BotonEstilo boton, String nombre, Runnable accion) {
 		boton.setName(nombre);
-		boton.setFocusable(false);
+		boton.setFocusable(true);
 		boton.addActionListener(evento -> accion.run());
 	}
 
@@ -97,7 +105,7 @@ final class PanelJuego extends JPanel {
 		barra.setOpaque(false);
 		barra.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel titulo = Tema.etiqueta("ZIP", Font.BOLD, TAMANO_TITULO_JUEGO, Tema.TINTA);
-		titulo.setFont(Tema.fuenteConEspaciado(TAMANO_TITULO_JUEGO, true,
+		titulo.setFont(Tema.fuenteConEspaciado(Font.BOLD, TAMANO_TITULO_JUEGO,
 				ESPACIADO_TITULO_JUEGO));
 		barra.add(titulo, BorderLayout.WEST);
 		barra.add(crearBotonVolver(accionVolver), BorderLayout.EAST);
@@ -146,6 +154,14 @@ final class PanelJuego extends JPanel {
 		acciones.add(Box.createHorizontalStrut(Tema.SEPARACION_MEDIA));
 		acciones.add(reiniciar);
 		return acciones;
+	}
+
+	@Override
+	public void setVisible(boolean visible) {
+		super.setVisible(visible);
+		if (visible) {
+			revalidate();
+		}
 	}
 
 	void controles(Controles controles) {

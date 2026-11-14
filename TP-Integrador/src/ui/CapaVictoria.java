@@ -107,7 +107,6 @@ final class CapaVictoria extends JPanel {
 	private BotonEstilo ajustarBoton(BotonEstilo boton) {
 		boton.setPreferredSize(new Dimension(ANCHO_BOTON_VICTORIA,
 				boton.getPreferredSize().height));
-		boton.setMaximumSize(boton.getPreferredSize());
 		return boton;
 	}
 

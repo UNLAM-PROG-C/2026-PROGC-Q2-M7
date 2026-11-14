@@ -2,6 +2,7 @@ package ui;
 
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -205,7 +206,7 @@ final class PanelTablero extends JPanel {
 
 	private void dibujarTextoNumero(Graphics2D dibujo, Geometria grilla, int fila, int columna,
 			int numero) {
-		dibujo.setFont(Tema.fuente(TAMANO_NUMERO, true));
+		dibujo.setFont(Tema.fuente(Font.BOLD, TAMANO_NUMERO));
 		String texto = Integer.toString(numero);
 		FontMetrics metricas = dibujo.getFontMetrics();
 		int x = grilla.centroX(columna) - metricas.stringWidth(texto) / 2;
@@ -259,7 +260,7 @@ final class PanelTablero extends JPanel {
 	}
 
 	private void dibujarTextoTomate(Graphics2D dibujo, int centroX, int centroY) {
-		dibujo.setFont(Tema.fuente(Tema.TAMANO_TITULO_GRANDE, true));
+		dibujo.setFont(Tema.fuente(Font.BOLD, Tema.TAMANO_TITULO_GRANDE));
 		FontMetrics metricas = dibujo.getFontMetrics();
 		int x = centroX - metricas.stringWidth(TEXTO_TOMATE) / 2;
 		int y = centroY + (metricas.getAscent() - metricas.getDescent()) / 2;

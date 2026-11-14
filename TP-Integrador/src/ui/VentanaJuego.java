@@ -41,7 +41,7 @@ public final class VentanaJuego implements AutoCloseable {
 	private final PanelConfiguracion configuracion = new PanelConfiguracion(
 			this::iniciar, this::seleccionarModo);
 	private final PanelMultijugador multijugador = new PanelMultijugador(
-			this::iniciarHost, this::iniciarCliente, this::restaurarMenu);
+			this::iniciarHost, this::iniciarCliente, this::menu);
 	private final PanelJuego juego = crearPanelJuego();
 	private final CapaVictoria victoria = new CapaVictoria(
 			() -> publicarEvento(new Evento(TipoEvento.INICIAR, dificultadActual)),
@@ -219,13 +219,6 @@ public final class VentanaJuego implements AutoCloseable {
 		}
 		resetearMultijugador();
 		mostrarPantalla(MULTIJUGADOR);
-	}
-
-	private void restaurarMenu() {
-		abandonar();
-		modoActual = ModoJuego.UN_JUGADOR;
-		configuracion.seleccionarModo(modoActual);
-		mostrarPantalla(CONFIGURACION);
 	}
 
 	private void recibir(long intento, ActualizacionVista actualizacion) {

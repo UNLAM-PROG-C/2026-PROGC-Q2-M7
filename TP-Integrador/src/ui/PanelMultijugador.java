@@ -125,7 +125,6 @@ final class PanelMultijugador extends JPanel {
 
 	private static BotonEstilo configurarBoton(BotonEstilo boton) {
 		boton.setPreferredSize(new Dimension(ANCHO_BOTON, boton.getPreferredSize().height));
-		boton.setMaximumSize(boton.getPreferredSize());
 		return boton;
 	}
 }

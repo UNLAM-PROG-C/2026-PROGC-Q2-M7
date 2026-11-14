@@ -80,6 +80,14 @@ final class BotonEstilo extends JButton {
 	}
 
 	@Override
+	public Dimension getMaximumSize() {
+		if (isMaximumSizeSet()) {
+			return super.getMaximumSize();
+		}
+		return getPreferredSize();
+	}
+
+	@Override
 	protected void paintComponent(Graphics graficos) {
 		Graphics2D dibujo = (Graphics2D) graficos.create();
 		try {
