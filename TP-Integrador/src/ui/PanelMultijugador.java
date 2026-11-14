@@ -1,45 +1,43 @@
 package ui;
 
-import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import javax.swing.BorderFactory;
-import javax.swing.Box;
+import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.SwingConstants;
 import utils.Constantes;
 
 final class PanelMultijugador extends JPanel {
 	private static final long serialVersionUID = 1L;
-	private static final int ANCHO_CONTENIDO = 460;
-	private static final int ANCHO_BOTON = 360;
-	private static final int TAMANO_TEXTO_DESCRIPCION = 18;
-	private static final int TAMANO_ICONO_CONSTRUCCION = 92;
-	private static final int SEPARACION_ICONO = 22;
-	private static final int SEPARACION_INSIGNIA = 18;
-	private static final int SEPARACION_TITULO = 14;
-	private static final int SEPARACION_DESCRIPCION = 28;
-	private static final int SEPARACION_BOTON_VOLVER = 10;
+	private static final int MARGEN_BOTON = 120;
+	private static final String TEXTO_HOST = "Crear partida (Host)";
+	private static final String TEXTO_CLIENTE = "Unirse a partida (Cliente)";
+	private static final String DESCRIPCION = "<html><div style='text-align:center;width:460px;'>"
+			+ "Elegí si querés alojar la partida esperando en el puerto " + Constantes.PUERTO
+			+ " o conectarte como cliente.</div></html>";
 
-	private final BotonEstilo host = BotonEstilo.principal("Crear partida (Host)");
-	private final BotonEstilo cliente = BotonEstilo.principal("Unirse a partida (Cliente)");
-	private final BotonEstilo volver = BotonEstilo.fantasma("Volver / Cancelar");
-	private final JLabel estadoMensaje = Tema.etiqueta(" ", Font.PLAIN, Tema.TAMANO_ESTADO, Tema.TINTA);
+	private final JButton host = Tema.boton(TEXTO_HOST, true);
+	private final JButton cliente = Tema.boton(TEXTO_CLIENTE, true);
+	private final JButton volver = Tema.boton("Volver / Cancelar", false);
+	private final JLabel estadoMensaje = Tema.etiqueta(" ", Font.PLAIN, Tema.TAMANO_TEXTO, Tema.TINTA);
 
 	PanelMultijugador(Runnable alCrearPartida, Runnable alUnirseAPartida, Runnable alVolver) {
-		super(new BorderLayout());
-		configurarPanel();
-		vincularAcciones(alCrearPartida, alUnirseAPartida, alVolver);
-		add(construirContenido(), BorderLayout.CENTER);
+		super(new GridBagLayout());
+		setName("multijugador");
+		setBackground(Tema.FONDO);
+		setBorder(BorderFactory.createEmptyBorder(Tema.MARGEN, Tema.MARGEN, Tema.MARGEN, Tema.MARGEN));
+		construirContenido(alCrearPartida, alUnirseAPartida, alVolver);
 	}
 
 	void ocupado(boolean ocupado) {
 		host.setEnabled(!ocupado);
 		cliente.setEnabled(!ocupado);
-		volver.setEnabled(true);
-		host.setText(ocupado ? "Conectando…" : "Crear partida (Host)");
-		cliente.setText(ocupado ? "Conectando…" : "Unirse a partida (Cliente)");
+		host.setText(ocupado ? "Conectando…" : TEXTO_HOST);
+		cliente.setText(ocupado ? "Conectando…" : TEXTO_CLIENTE);
 	}
 
 	void estado(String mensaje) {
@@ -53,78 +51,40 @@ final class PanelMultijugador extends JPanel {
 		estadoMensaje.setForeground(Tema.ERROR);
 	}
 
-	private void configurarPanel() {
-		setName("multijugador");
-		setBackground(Tema.FONDO);
-		setBorder(BorderFactory.createEmptyBorder(Tema.RELLENO_VERTICAL_MENU,
-				Tema.RELLENO_HORIZONTAL_MENU, Tema.RELLENO_VERTICAL_MENU, Tema.RELLENO_HORIZONTAL_MENU));
-		host.setName("crear-host");
-		cliente.setName("unirse-cliente");
-		volver.setName("multijugador-volver");
+	private void construirContenido(Runnable alCrear, Runnable alUnirse, Runnable alVolver) {
+		agregar(crearInsignia(), Tema.ESPACIO, 0);
+		agregar(Tema.etiqueta("Multijugador en Red (TCP)", Font.BOLD, Tema.TAMANO_TITULO, Tema.TINTA), Tema.ESPACIO, 0);
+		JLabel desc = Tema.etiqueta(DESCRIPCION, Font.PLAIN, Tema.TAMANO_SUBTITULO, Tema.TINTA_SUAVE);
+		desc.setName("multijugador-descripcion");
+		agregar(desc, Tema.MARGEN, 0);
+		agregar(boton(host, "crear-host", alCrear), Tema.ESPACIO, MARGEN_BOTON);
+		agregar(boton(cliente, "unirse-cliente", alUnirse), Tema.ESPACIO, MARGEN_BOTON);
 		estadoMensaje.setName("estado-multijugador");
-		estadoMensaje.setHorizontalAlignment(SwingConstants.CENTER);
-		int altoEstado = estadoMensaje.getPreferredSize().height;
-		estadoMensaje.setPreferredSize(new Dimension(0, altoEstado));
-		estadoMensaje.setMinimumSize(new Dimension(0, altoEstado));
-		estadoMensaje.setMaximumSize(new Dimension(Integer.MAX_VALUE, altoEstado));
+		estadoMensaje.setHorizontalAlignment(JLabel.CENTER);
+		agregar(estadoMensaje, Tema.ESPACIO, 0);
+		agregar(boton(volver, "multijugador-volver", alVolver), 0, 0);
 	}
 
-	private void vincularAcciones(Runnable alCrearPartida, Runnable alUnirseAPartida, Runnable alVolver) {
-		host.addActionListener(evento -> alCrearPartida.run());
-		cliente.addActionListener(evento -> alUnirseAPartida.run());
-		volver.addActionListener(evento -> alVolver.run());
+	private void agregar(JComponent comp, int abajo, int margenH) {
+		GridBagConstraints gbc = new GridBagConstraints();
+		gbc.gridx = 0;
+		gbc.weightx = comp == estadoMensaje ? 1 : 0;
+		gbc.fill = (comp == estadoMensaje || margenH > 0) ? GridBagConstraints.HORIZONTAL : GridBagConstraints.NONE;
+		gbc.insets = new Insets(0, margenH, abajo, margenH);
+		add(comp, gbc);
 	}
 
-	private JPanel construirContenido() {
-		JPanel contenido = Tema.panelVertical();
-		contenido.add(Box.createVerticalGlue());
-		agregarIntroduccion(contenido);
-		agregarAcciones(contenido);
-		contenido.add(Box.createVerticalGlue());
-		return contenido;
-	}
-
-	private void agregarIntroduccion(JPanel contenido) {
-		JLabel icono = new JLabel(new IconoLineal(TipoIcono.ENGRANAJE, TAMANO_ICONO_CONSTRUCCION, Tema.ACENTO));
-		contenido.add(Tema.centrar(icono));
-		contenido.add(Box.createVerticalStrut(SEPARACION_ICONO));
-		contenido.add(Tema.centrar(Tema.etiquetaPastilla("MULTIJUGADOR")));
-		contenido.add(Box.createVerticalStrut(SEPARACION_INSIGNIA));
-		contenido.add(Tema.centrar(crearTitulo()));
-		contenido.add(Box.createVerticalStrut(SEPARACION_TITULO));
-		contenido.add(Tema.centrar(crearDescripcion()));
-	}
-
-	private void agregarAcciones(JPanel contenido) {
-		contenido.add(Box.createVerticalStrut(SEPARACION_DESCRIPCION));
-		contenido.add(Tema.centrar(configurarBoton(host)));
-		contenido.add(Box.createVerticalStrut(Tema.SEPARACION_MEDIA));
-		contenido.add(Tema.centrar(configurarBoton(cliente)));
-		contenido.add(Box.createVerticalStrut(Tema.SEPARACION_MEDIA));
-		contenido.add(estadoMensaje);
-		contenido.add(Box.createVerticalStrut(SEPARACION_BOTON_VOLVER));
-		contenido.add(Tema.centrar(volver));
-	}
-
-	private JLabel crearTitulo() {
-		JLabel titulo = Tema.etiqueta("Multijugador en Red (TCP)",
-				Font.BOLD, Tema.TAMANO_TITULO_GRANDE, Tema.TINTA);
-		titulo.setHorizontalAlignment(SwingConstants.CENTER);
-		return titulo;
-	}
-
-	private JLabel crearDescripcion() {
-		String html = "<html><div style='text-align:center;width:" + ANCHO_CONTENIDO
-				+ "px;'>Elegí si querés alojar la partida esperando en el puerto "
-				+ Constantes.PUERTO + " o conectarte como cliente.</div></html>";
-		JLabel descripcion = Tema.etiqueta(html, Font.PLAIN, TAMANO_TEXTO_DESCRIPCION, Tema.TINTA_SUAVE);
-		descripcion.setName("multijugador-descripcion");
-		descripcion.setHorizontalAlignment(SwingConstants.CENTER);
-		return descripcion;
-	}
-
-	private static BotonEstilo configurarBoton(BotonEstilo boton) {
-		boton.setPreferredSize(new Dimension(ANCHO_BOTON, boton.getPreferredSize().height));
+	private static JButton boton(JButton boton, String nombre, Runnable accion) {
+		boton.setName(nombre);
+		boton.addActionListener(e -> accion.run());
 		return boton;
+	}
+
+	private static JLabel crearInsignia() {
+		JLabel tag = Tema.etiqueta("MULTIJUGADOR", Font.BOLD, Tema.TAMANO_CHICO, Tema.ACENTO);
+		tag.setOpaque(true);
+		tag.setBackground(Tema.VISITADA);
+		tag.setBorder(BorderFactory.createEmptyBorder(Tema.ESPACIO / 2, Tema.ESPACIO, Tema.ESPACIO / 2, Tema.ESPACIO));
+		return tag;
 	}
 }
