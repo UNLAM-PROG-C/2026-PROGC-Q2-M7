@@ -21,6 +21,8 @@ import model.Direccion;
 import model.EstadoJuego;
 
 final class PanelJuego {
+	private static final String AYUDA_MOUSE =
+			"Mantené click y arrastrá desde el punto · soltá para confirmar";
 	private final JPanel panel = new JPanel(new BorderLayout(0, Tema.SEPARACION_JUEGO));
 	private final PanelTablero tablero = new PanelTablero();
 	private final IndicadorInformacion celdas = new IndicadorInformacion("Celdas", "progreso");
@@ -30,6 +32,7 @@ final class PanelJuego {
 	private final JPanel teclasAyuda = horizontal();
 	private final BotonSecundario deshacer = new BotonSecundario("Deshacer", TipoIcono.DESHACER);
 	private final BotonSecundario reiniciar = new BotonSecundario("Reiniciar", TipoIcono.REINICIAR);
+	private final AdaptadorMouse adaptadorMouse = new AdaptadorMouse(tablero, this::mover);
 	private final Consumer<Direccion> mover;
 	private final Runnable accionDeshacer;
 	private boolean jugando;
@@ -39,6 +42,7 @@ final class PanelJuego {
 		this.mover = mover;
 		this.accionDeshacer = accionDeshacer;
 		configurarPanel();
+		adaptadorMouse.instalar();
 		panel.add(encabezado(volver), BorderLayout.NORTH);
 		panel.add(tablero, BorderLayout.CENTER);
 		panel.add(pie(accionReiniciar), BorderLayout.SOUTH);
@@ -121,11 +125,18 @@ final class PanelJuego {
 	void controles(Controles controles) {
 		panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
 		panel.getActionMap().clear();
+		if (!controles.usaMouse()) {
+			vincularDirecciones(controles);
+		}
+		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::hacerClic);
+		adaptadorMouse.habilitar(controles.usaMouse());
+		reconstruirAyuda(controles);
+	}
+
+	private void vincularDirecciones(Controles controles) {
 		for (Direccion direccion : Direccion.values()) {
 			vincular("mover-" + direccion, controles.tecla(direccion), () -> mover(direccion));
 		}
-		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::hacerClic);
-		reconstruirAyuda(controles);
 	}
 
 	private void reconstruirAyuda(Controles controles) {
@@ -142,6 +153,10 @@ final class PanelJuego {
 
 	private JPanel teclasDireccion(Controles controles) {
 		JPanel teclas = horizontal();
+		if (controles.usaMouse()) {
+			teclas.add(etiqueta(AYUDA_MOUSE, Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE));
+			return teclas;
+		}
 		JComponent[] valores = teclasJuego(controles);
 		for (int indice = 0; indice < valores.length; indice++) {
 			if (indice > 0) {

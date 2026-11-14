@@ -6,7 +6,9 @@ import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +20,7 @@ import model.EstadoJuego;
 final class PanelTablero extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private transient Optional<EstadoJuego> estado = Optional.empty();
+	private transient List<Celda> trazo = List.of();
 	private boolean manchadoPorTomate;
 
 	PanelTablero() {
@@ -35,6 +38,27 @@ final class PanelTablero extends JPanel {
 
 	void mostrar(EstadoJuego estado) {
 		mostrar(estado, false);
+	}
+
+	Optional<EstadoJuego> estadoActual() {
+		return estado;
+	}
+
+	Optional<Celda> celdaEn(Point punto) {
+		if (estado.isEmpty()) {
+			return Optional.empty();
+		}
+		return geometria().celdaEn(punto);
+	}
+
+	void mostrarTrazo(List<Celda> trazo) {
+		this.trazo = List.copyOf(trazo);
+		repaint();
+	}
+
+	void limpiarTrazo() {
+		trazo = List.of();
+		repaint();
 	}
 
 	@Override
@@ -82,6 +106,7 @@ final class PanelTablero extends JPanel {
 		dibujarCeldas(dibujo, grilla, visitadas);
 		dibujarRecorrido(dibujo, grilla);
 		dibujarActual(dibujo, grilla);
+		dibujarTrazo(dibujo, grilla);
 		dibujarNumeros(dibujo, grilla);
 	}
 
@@ -122,6 +147,31 @@ final class PanelTablero extends JPanel {
 		int y = grilla.centroY(actual) - Tema.PUNTO_ACTUAL / 2;
 		dibujo.setColor(Tema.TARJETA);
 		dibujo.fillOval(x, y, Tema.PUNTO_ACTUAL, Tema.PUNTO_ACTUAL);
+	}
+
+	private void dibujarTrazo(Graphics2D dibujo, Geometria grilla) {
+		if (trazo.isEmpty()) {
+			return;
+		}
+		dibujo.setColor(Tema.TRAZO_CELDA);
+		for (Celda celda : trazo) {
+			dibujo.fill(Tema.redondeado(grilla.x(celda), grilla.y(celda), grilla.celda(),
+					grilla.celda(), Tema.RADIO_CELDA));
+		}
+		dibujarLineaTrazo(dibujo, grilla);
+	}
+
+	private void dibujarLineaTrazo(Graphics2D dibujo, Geometria grilla) {
+		Celda actual = estadoJuego().actual();
+		Path2D.Float linea = new Path2D.Float();
+		linea.moveTo(grilla.centroX(actual), grilla.centroY(actual));
+		for (Celda celda : trazo) {
+			linea.lineTo(grilla.centroX(celda), grilla.centroY(celda));
+		}
+		dibujo.setColor(Tema.TRAZO_LINEA);
+		dibujo.setStroke(new BasicStroke(Tema.GROSOR_RECORRIDO,
+				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+		dibujo.draw(linea);
 	}
 
 	private void dibujarNumeros(Graphics2D dibujo, Geometria grilla) {
@@ -244,6 +294,24 @@ final class PanelTablero extends JPanel {
 
 		int centroY(Celda posicion) {
 			return y(posicion) + celda / 2;
+		}
+
+		Optional<Celda> celdaEn(Point punto) {
+			int columna = indiceEn(punto.x - izquierdaGrilla);
+			int fila = indiceEn(punto.y - superiorGrilla);
+			if (columna < 0 || fila < 0) {
+				return Optional.empty();
+			}
+			return Optional.of(new Celda(fila, columna));
+		}
+
+		private int indiceEn(int desplazamiento) {
+			int paso = celda + Tema.SEPARACION_CELDAS;
+			if (desplazamiento < 0 || desplazamiento % paso >= celda) {
+				return -1;
+			}
+			int indice = desplazamiento / paso;
+			return indice < tamanoNivel ? indice : -1;
 		}
 	}
 }

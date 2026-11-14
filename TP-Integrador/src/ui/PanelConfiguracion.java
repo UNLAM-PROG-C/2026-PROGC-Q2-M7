@@ -4,6 +4,7 @@ import java.awt.CardLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.util.EnumMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
@@ -19,6 +20,7 @@ import model.ModoJuego;
 import utils.Constantes;
 
 final class PanelConfiguracion {
+	private static final String PREFIJO_CONTROLES = "controles-";
 	private static final String RESUMEN = "resumen";
 	private static final String ESTADO_MENSAJE = "estadoMensaje";
 	private final JPanel panel = panelVertical();
@@ -125,7 +127,7 @@ final class PanelConfiguracion {
 	}
 
 	private void agregarControl(GrupoSeleccion grupo, TarjetaControles tarjeta) {
-		tarjeta.setName(tarjeta.controles() == Controles.FLECHAS ? "controles-flechas" : "controles-wasd");
+		tarjeta.setName(PREFIJO_CONTROLES + tarjeta.controles().name().toLowerCase(Locale.ROOT));
 		tarjeta.agregarEscucha(evento -> elegirControles(tarjeta.controles()));
 		grupo.agregar(tarjeta);
 		controles.put(tarjeta.controles(), tarjeta);

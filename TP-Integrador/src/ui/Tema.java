@@ -25,6 +25,9 @@ final class Tema {
 	static final Color ACENTO_SUAVE = new Color(0xE1E5F8);
 	static final Color FONDO_TABLERO = new Color(0xDDE1F5);
 	static final Color VISITADA = new Color(0xDAD7FB);
+	static final float TRANSPARENCIA_TRAZO = 0.55f;
+	static final Color TRAZO_CELDA = new Color(0xECEAFD);
+	static final Color TRAZO_LINEA = conTransparencia(ACENTO, TRANSPARENCIA_TRAZO);
 	static final Color FOCO = ACENTO;
 	static final Color ERROR = new Color(0xA43535);
 	static final Color SUPERPOSICION = TINTA;
@@ -64,7 +67,7 @@ final class Tema {
 	static final int TAMANO_RADIO = 20;
 	static final int PUNTO_RADIO = 8;
 	static final int ESPACIO_RADIO = 34;
-	static final int TAMANO_TECLA_MENU = 44;
+	static final int TAMANO_TECLA_MENU = 34;
 	static final int CANTIDAD_TECLAS_CONTROL = 4;
 	static final int RELLENO_INFERIOR_TECLAS = 18;
 	static final int TAMANO_TECLA_JUEGO = 28;

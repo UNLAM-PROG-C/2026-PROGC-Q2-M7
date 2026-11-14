@@ -8,6 +8,9 @@ import javax.swing.JPanel;
 
 final class TarjetaControles extends TarjetaSeleccionable {
 	private static final long serialVersionUID = 1L;
+	private static final int ANCHO_TECLA_CLICK = 64;
+	private static final String TEXTO_CLICK = "Click";
+	private static final String TEXTO_ARRASTRAR = "y arrastrá";
 	private final Controles controles;
 
 	TarjetaControles(Controles controles) {
@@ -40,9 +43,22 @@ final class TarjetaControles extends TarjetaSeleccionable {
 		teclado.setOpaque(false);
 		teclado.setLayout(new javax.swing.BoxLayout(teclado, javax.swing.BoxLayout.Y_AXIS));
 		teclado.setAlignmentX(CENTER_ALIGNMENT);
+		if (controles.usaMouse()) {
+			return mouse(teclado);
+		}
 		teclado.add(centrado(tecla(controles, true, 0)));
 		teclado.add(Box.createVerticalStrut(Tema.SEPARACION_TECLAS));
 		teclado.add(teclasInferiores(controles));
+		return teclado;
+	}
+
+	private static JPanel mouse(JPanel teclado) {
+		JLabel texto = new JLabel(TEXTO_ARRASTRAR);
+		texto.setFont(Tema.fuente(Tema.TAMANO_TEXTO_TARJETA, false));
+		texto.setForeground(Tema.TINTA_SUAVE);
+		teclado.add(centrado(new TeclaVisual(TEXTO_CLICK, ANCHO_TECLA_CLICK, Tema.TAMANO_TECLA_MENU)));
+		teclado.add(Box.createVerticalStrut(Tema.SEPARACION_TECLAS));
+		teclado.add(centrado(texto));
 		return teclado;
 	}
 
