@@ -1,14 +1,21 @@
 package ui;
 
-import java.awt.CardLayout;
+import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
-import javax.swing.BoxLayout;
+import javax.swing.ButtonGroup;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -18,207 +25,50 @@ import model.Dificultad;
 import model.ModoJuego;
 import utils.Constantes;
 
-final class PanelConfiguracion {
-	private static final String RESUMEN = "resumen";
-	private static final String ESTADO_MENSAJE = "estadoMensaje";
-	private final JPanel panel = panelVertical();
-	private final Map<ModoJuego, TarjetaModoJuego> modos = new EnumMap<>(ModoJuego.class);
-	private final Map<Controles, TarjetaControles> controles = new EnumMap<>(Controles.class);
-	private final Map<Dificultad, TarjetaDificultad> dificultades = new EnumMap<>(Dificultad.class);
-	private JSlider sliderRondas;
-	private JLabel etiquetaRondas;
-	private final JLabel resumen = etiqueta("", Tema.TAMANO_RESUMEN, false, Tema.TINTA_SUAVE);
-	private final JLabel estadoMensaje = etiqueta(" ", Tema.TAMANO_ESTADO, false, Tema.TINTA);
-	private final CardLayout tarjetasMensaje = new CardLayout();
-	private final JPanel mensaje = new JPanel(tarjetasMensaje);
-	private final BotonPrincipal jugar = new BotonPrincipal("Jugar");
-	private final IniciadorJuego iniciar;
-	private final Consumer<ModoJuego> modoSeleccionado;
+final class PanelConfiguracion extends JPanel {
+	private static final long serialVersionUID = 1L;
+	private static final int TAMANO_TITULO_MENU = 56;
+	private static final int TAMANO_SUBTITULO_MENU = 18;
+	private static final float ESPACIADO_TITULO = 0.11f;
+	private static final int ALTO_TARJETA_MODO = 80;
+	private static final int ALTO_TARJETA_CONTROLES = 152;
+	private static final int ALTO_TARJETA_DIFICULTAD = 128;
+	private static final int TAMANO_VALOR_TARJETA = 34;
+	private static final int CANTIDAD_TECLAS_CONTROL = 4;
+	private static final int RELLENO_INFERIOR_TECLAS = 12;
+	private static final int TAMANO_RESUMEN = 14;
+	private static final int ALTO_LINEA_RESUMEN = 20;
+
+	private final transient Map<ModoJuego, TarjetaOpcion<ModoJuego>> modos = new EnumMap<>(ModoJuego.class);
+	private final transient Map<Controles, TarjetaOpcion<Controles>> controles = new EnumMap<>(Controles.class);
+	private final transient Map<Dificultad, TarjetaOpcion<Dificultad>> dificultades = new EnumMap<>(Dificultad.class);
+	private final transient List<TarjetaOpcion<?>> tarjetas = new ArrayList<>();
+	private final JSlider sliderRondas = crearSliderRondas();
+	private final JLabel etiquetaRondas = Tema.etiqueta("", Font.BOLD, Tema.TAMANO_TEXTO_AYUDA, Tema.ACENTO);
+	private final JLabel estadoMensaje = Tema.etiqueta(" ", Font.PLAIN, TAMANO_RESUMEN, Tema.TINTA_SUAVE);
+	private final BotonEstilo jugar = BotonEstilo.principal("Jugar");
+	private final transient Consumer<ModoJuego> alCambiarModo;
+
+	private ModoJuego modoSeleccionadoActual = ModoJuego.UN_JUGADOR;
 	private Controles controlesSeleccionados = Controles.FLECHAS;
 	private Dificultad dificultadSeleccionada = Dificultad.MEDIA;
-	private ModoJuego modoSeleccionadoActual = ModoJuego.UN_JUGADOR;
 
-	PanelConfiguracion(IniciadorJuego iniciar, Consumer<ModoJuego> modoSeleccionado) {
-		this.iniciar = iniciar;
-		this.modoSeleccionado = modoSeleccionado;
-		configurarPanel();
+	PanelConfiguracion(BiConsumer<Controles, Dificultad> alIniciar, Consumer<ModoJuego> alCambiarModo) {
+		this.alCambiarModo = alCambiarModo;
+		configurarPanel(alIniciar);
 		crearOpciones();
 		construirDisposicion();
-		actualizarSeleccion();
+		aplicarEstadoInicial();
 	}
 
-	private void configurarPanel() {
-		panel.setName("configuracion");
-		panel.setBackground(Tema.FONDO);
-		panel.setBorder(BorderFactory.createEmptyBorder(Tema.RELLENO_VERTICAL_MENU,
-				Tema.RELLENO_HORIZONTAL_MENU, Tema.RELLENO_VERTICAL_MENU,
-				Tema.RELLENO_HORIZONTAL_MENU));
-		jugar.setName("iniciar");
-		estadoMensaje.setName("estado-configuracion");
-		resumen.setName("resumen-seleccion");
-		jugar.agregarEscucha(evento -> iniciar.iniciar(controlesSeleccionados, dificultadSeleccionada));
-	}
-
-	private void crearOpciones() {
-		GrupoSeleccion grupoModo = new GrupoSeleccion();
-		agregarModo(grupoModo, new TarjetaModoJuego(ModoJuego.UN_JUGADOR, "Un jugador", "A tu ritmo."));
-		agregarModo(grupoModo, new TarjetaModoJuego(ModoJuego.MULTIJUGADOR,
-				"Multijugador", "Jugá con otras personas."));
-		GrupoSeleccion grupoControles = new GrupoSeleccion();
-		for (Controles valor : Controles.values()) {
-			agregarControl(grupoControles, new TarjetaControles(valor));
-		}
-		GrupoSeleccion grupoDificultad = new GrupoSeleccion();
-		for (Dificultad valor : Dificultad.values()) {
-			agregarDificultad(grupoDificultad, new TarjetaDificultad(valor));
-		}
-	}
-
-	private void construirDisposicion() {
-		panel.add(encabezado());
-		panel.add(seccion("MODO DE JUEGO", grilla(modos.values().toArray(new JComponent[0]))));
-		panel.add(Box.createVerticalStrut(Tema.SEPARACION_SECCION));
-		panel.add(seccion("CONTROLES", grilla(controles.values().toArray(new JComponent[0]))));
-		panel.add(Box.createVerticalStrut(Tema.SEPARACION_SECCION));
-		panel.add(seccion("DIFICULTAD", grilla(dificultades.values().toArray(new JComponent[0]))));
-		panel.add(Box.createVerticalStrut(Tema.SEPARACION_SECCION));
-		panel.add(seccion("RONDAS PARA GANAR", panelSliderRondas()));
-		panel.add(Box.createVerticalGlue());
-		panel.add(pie());
-	}
-
-	private JPanel panelSliderRondas() {
-		JPanel contenedor = new JPanel();
-		contenedor.setLayout(new BoxLayout(contenedor, BoxLayout.X_AXIS));
-		contenedor.setOpaque(false);
-		contenedor.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-		sliderRondas = new JSlider(Constantes.MIN_RONDAS, Constantes.MAX_RONDAS, Constantes.RONDAS_POR_DEFECTO);
-		sliderRondas.setOpaque(false);
-		sliderRondas.setMajorTickSpacing(1);
-		sliderRondas.setPaintTicks(true);
-		sliderRondas.setPaintLabels(true);
-		sliderRondas.setForeground(Tema.TINTA);
-		sliderRondas.setFont(Tema.fuente(Tema.TAMANO_TEXTO_AYUDA, true));
-
-		etiquetaRondas = etiqueta(sliderRondas.getValue() + " rondas", Tema.TAMANO_TEXTO_AYUDA, true, Tema.ACENTO);
-		sliderRondas.addChangeListener(e -> {
-			etiquetaRondas.setText(sliderRondas.getValue() + (sliderRondas.getValue() == 1 ? " ronda" : " rondas"));
-			actualizarSeleccion();
-		});
-
-		contenedor.add(sliderRondas);
-		contenedor.add(Box.createHorizontalStrut(Tema.SEPARACION_RESUMEN));
-		contenedor.add(etiquetaRondas);
-		return contenedor;
-	}
-
-	int rondasSeleccionadas() {
-		return sliderRondas != null ? sliderRondas.getValue() : Constantes.RONDAS_POR_DEFECTO;
-	}
-
-	private void agregarModo(GrupoSeleccion grupo, TarjetaModoJuego tarjeta) {
-		tarjeta.setName(tarjeta.modo() == ModoJuego.UN_JUGADOR ? "modo-un-jugador" : "modo-multijugador");
-		tarjeta.agregarEscucha(evento -> elegirModo(tarjeta.modo()));
-		grupo.agregar(tarjeta);
-		modos.put(tarjeta.modo(), tarjeta);
-	}
-
-	private void agregarControl(GrupoSeleccion grupo, TarjetaControles tarjeta) {
-		tarjeta.setName(tarjeta.controles() == Controles.FLECHAS ? "controles-flechas" : "controles-wasd");
-		tarjeta.agregarEscucha(evento -> elegirControles(tarjeta.controles()));
-		grupo.agregar(tarjeta);
-		controles.put(tarjeta.controles(), tarjeta);
-	}
-
-	private void agregarDificultad(GrupoSeleccion grupo, TarjetaDificultad tarjeta) {
-		tarjeta.setName("dificultad-" + tarjeta.dificultad().name().toLowerCase(java.util.Locale.ROOT));
-		tarjeta.agregarEscucha(evento -> elegirDificultad(tarjeta.dificultad()));
-		grupo.agregar(tarjeta);
-		dificultades.put(tarjeta.dificultad(), tarjeta);
-	}
-
-	private JPanel encabezado() {
-		JPanel encabezado = panelVertical();
-		JLabel titulo = etiqueta("ZIP", Tema.TAMANO_TITULO_MENU, true, Tema.TINTA);
-		titulo.setFont(Tema.fuenteConEspaciado(Tema.TAMANO_TITULO_MENU, true, Tema.ESPACIADO_TITULO));
-		JLabel subtitulo = etiqueta("Conectá los números. Completá el tablero.",
-				Tema.TAMANO_SUBTITULO_MENU, false, Tema.TINTA_SUAVE);
-		encabezado.add(titulo);
-		encabezado.add(Box.createVerticalStrut(Tema.SEPARACION_ENCABEZADO));
-		encabezado.add(subtitulo);
-		encabezado.add(Box.createVerticalGlue());
-		return ajustarTamano(encabezado, encabezado.getPreferredSize().height);
-	}
-
-	private JPanel seccion(String titulo, JPanel tarjetas) {
-		JPanel seccion = panelVertical();
-		JLabel etiqueta = etiqueta(titulo, Tema.TAMANO_TITULO_SECCION, true, Tema.TINTA_SUAVE);
-		etiqueta.setFont(Tema.fuenteConEspaciado(Tema.TAMANO_TITULO_SECCION, true, Tema.ESPACIADO_SECCION));
-		seccion.add(etiqueta);
-		seccion.add(Box.createVerticalStrut(Tema.SEPARACION_TITULO_SECCION));
-		seccion.add(tarjetas);
-		return ajustarTamano(seccion, seccion.getPreferredSize().height);
-	}
-
-	private JPanel grilla(JComponent[] tarjetas) {
-		JPanel grilla = new JPanel(new java.awt.GridLayout(1, tarjetas.length, Tema.SEPARACION_TARJETAS, 0));
-		grilla.setOpaque(false);
-		grilla.setAlignmentX(Component.LEFT_ALIGNMENT);
-		for (JComponent tarjeta : tarjetas) {
-			grilla.add(tarjeta);
-		}
-		return grilla;
-	}
-
-	private JPanel pie() {
-		JPanel pie = panelVertical();
-		configurarMensaje();
-		jugar.setAlignmentX(Component.LEFT_ALIGNMENT);
-		jugar.setMaximumSize(new Dimension(Integer.MAX_VALUE, jugar.getPreferredSize().height));
-		pie.add(mensaje);
-		pie.add(Box.createVerticalStrut(Tema.SEPARACION_RESUMEN));
-		pie.add(jugar);
-		return ajustarTamano(pie, pie.getPreferredSize().height);
-	}
-
-	private void configurarMensaje() {
-		mensaje.setOpaque(false);
-		mensaje.setAlignmentX(Component.LEFT_ALIGNMENT);
-		resumen.setHorizontalAlignment(SwingConstants.CENTER);
-		estadoMensaje.setHorizontalAlignment(SwingConstants.CENTER);
-		mensaje.add(resumen, RESUMEN);
-		mensaje.add(estadoMensaje, ESTADO_MENSAJE);
-		mensaje.setPreferredSize(new Dimension(0, Tema.ALTO_LINEA_RESUMEN));
-		mensaje.setMinimumSize(mensaje.getPreferredSize());
-		mensaje.setMaximumSize(new Dimension(Integer.MAX_VALUE, Tema.ALTO_LINEA_RESUMEN));
-	}
-
-	private void elegirModo(ModoJuego modo) {
+	void seleccionarModo(ModoJuego modo) {
 		modoSeleccionadoActual = modo;
-		actualizarSeleccion();
-		modoSeleccionado.accept(modo);
+		modos.get(modo).setSelected(true);
+		actualizarResumen();
 	}
 
-	private void elegirControles(Controles valor) {
-		controlesSeleccionados = valor;
-		actualizarSeleccion();
-	}
-
-	private void elegirDificultad(Dificultad valor) {
-		dificultadSeleccionada = valor;
-		actualizarSeleccion();
-	}
-
-	private void actualizarSeleccion() {
-		modos.get(modoSeleccionadoActual).seleccionar(true);
-		controles.get(controlesSeleccionados).seleccionar(true);
-		dificultades.get(dificultadSeleccionada).seleccionar(true);
-		int rondas = rondasSeleccionadas();
-		resumen.setText(controlesSeleccionados + " · " + TarjetaDificultad.titulo(dificultadSeleccionada)
-				+ " " + dificultadSeleccionada.tamano() + "×" + dificultadSeleccionada.tamano()
-				+ " · Al mejor de " + rondas + (rondas == 1 ? " ronda" : " rondas"));
-		tarjetasMensaje.show(mensaje, RESUMEN);
+	ModoJuego modoSeleccionado() {
+		return modoSeleccionadoActual;
 	}
 
 	Controles controlesSeleccionados() {
@@ -229,61 +79,333 @@ final class PanelConfiguracion {
 		return dificultadSeleccionada;
 	}
 
-	void seleccionarModo(ModoJuego modo) {
-		modoSeleccionadoActual = modo;
-		actualizarSeleccion();
+	int cantidadRondas() {
+		return sliderRondas.getValue();
 	}
 
 	void ocupado(boolean ocupado) {
 		jugar.setEnabled(!ocupado);
-		modos.values().forEach(tarjeta -> tarjeta.setEnabled(!ocupado));
-		controles.values().forEach(tarjeta -> tarjeta.setEnabled(!ocupado));
-		dificultades.values().forEach(tarjeta -> tarjeta.setEnabled(!ocupado));
-		if (sliderRondas != null) {
-			sliderRondas.setEnabled(!ocupado);
-		}
-		jugar.cambiarTexto(ocupado ? "Preparando…" : "Jugar");
+		sliderRondas.setEnabled(!ocupado);
+		tarjetas.forEach(tarjeta -> tarjeta.setEnabled(!ocupado));
+		jugar.setText(ocupado ? "Preparando…" : "Jugar");
 		if (ocupado) {
 			mostrarEstado("Generando un tablero con solución.", Tema.TINTA);
-		} else {
-			tarjetasMensaje.show(mensaje, RESUMEN);
+			return;
+		}
+		actualizarResumen();
+	}
+
+	void error(String mensaje) {
+		ocupado(false);
+		mostrarEstado(mensaje, Tema.ERROR);
+	}
+
+	private void configurarPanel(BiConsumer<Controles, Dificultad> alIniciar) {
+		setLayout(new javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS));
+		setName("configuracion");
+		setBackground(Tema.FONDO);
+		setBorder(BorderFactory.createEmptyBorder(Tema.SEPARACION_SECCION,
+				Tema.RELLENO_HORIZONTAL_MENU, Tema.SEPARACION_SECCION, Tema.RELLENO_HORIZONTAL_MENU));
+		jugar.setName("iniciar");
+		estadoMensaje.setName("resumen-seleccion");
+		jugar.addActionListener(evento -> alIniciar.accept(controlesSeleccionados, dificultadSeleccionada));
+	}
+
+	private void crearOpciones() {
+		crearOpcionesModo();
+		crearOpcionesControles();
+		crearOpcionesDificultad();
+	}
+
+	private void crearOpcionesModo() {
+		ButtonGroup grupo = new ButtonGroup();
+		registrarModo(grupo, ModoJuego.UN_JUGADOR, "Un jugador", "A tu ritmo.");
+		registrarModo(grupo, ModoJuego.MULTIJUGADOR, "Multijugador", "Jugá con otras personas.");
+	}
+
+	private void registrarModo(ButtonGroup grupo, ModoJuego modo, String titulo, String descripcion) {
+		TarjetaOpcion<ModoJuego> tarjeta = crearTarjetaModo(modo, titulo, descripcion);
+		String sufijo = modo.name().toLowerCase(Locale.ROOT).replace('_', '-');
+		registrarOpcion(grupo, modos, tarjeta, "modo-" + sufijo, this::elegirModo);
+	}
+
+	private void crearOpcionesControles() {
+		ButtonGroup grupo = new ButtonGroup();
+		for (Controles valor : Controles.values()) {
+			String nombre = "controles-" + valor.name().toLowerCase(Locale.ROOT);
+			registrarOpcion(grupo, controles, crearTarjetaControles(valor), nombre, this::elegirControles);
 		}
 	}
 
-	void error(String texto) {
-		ocupado(false);
-		mostrarEstado(texto, Tema.ERROR);
+	private void crearOpcionesDificultad() {
+		ButtonGroup grupo = new ButtonGroup();
+		for (Dificultad valor : Dificultad.values()) {
+			String nombre = "dificultad-" + valor.name().toLowerCase(Locale.ROOT);
+			registrarOpcion(grupo, dificultades, crearTarjetaDificultad(valor),
+					nombre, this::elegirDificultad);
+		}
 	}
 
-	JPanel componente() {
+	private <T> void registrarOpcion(ButtonGroup grupo, Map<T, TarjetaOpcion<T>> mapa,
+			TarjetaOpcion<T> tarjeta, String nombre, Consumer<T> alElegir) {
+		tarjeta.setName(nombre);
+		tarjeta.addActionListener(evento -> alElegir.accept(tarjeta.valor()));
+		grupo.add(tarjeta);
+		mapa.put(tarjeta.valor(), tarjeta);
+		tarjetas.add(tarjeta);
+	}
+
+	private void construirDisposicion() {
+		add(encabezado());
+		add(Box.createVerticalStrut(Tema.SEPARACION_ENCABEZADO));
+		add(seccion("MODO DE JUEGO", grilla(modos.values())));
+		add(Box.createVerticalStrut(Tema.SEPARACION_GRANDE));
+		add(seccion("CONTROLES", grilla(controles.values())));
+		add(Box.createVerticalStrut(Tema.SEPARACION_GRANDE));
+		add(seccion("DIFICULTAD", grilla(dificultades.values())));
+		add(Box.createVerticalStrut(Tema.SEPARACION_GRANDE));
+		add(seccion("RONDAS PARA GANAR", panelSliderRondas()));
+		add(Box.createVerticalGlue());
+		add(pie());
+	}
+
+	private void aplicarEstadoInicial() {
+		modos.get(modoSeleccionadoActual).setSelected(true);
+		controles.get(controlesSeleccionados).setSelected(true);
+		dificultades.get(dificultadSeleccionada).setSelected(true);
+		actualizarEtiquetaRondas();
+		actualizarResumen();
+	}
+
+	private JPanel encabezado() {
+		JPanel encabezado = Tema.panelVertical();
+		JLabel titulo = Tema.etiqueta("ZIP", Font.BOLD, TAMANO_TITULO_MENU, Tema.TINTA);
+		titulo.setFont(Tema.fuenteConEspaciado(TAMANO_TITULO_MENU, true, ESPACIADO_TITULO));
+		JLabel subtitulo = Tema.etiqueta("Conectá los números. Completá el tablero.",
+				Font.PLAIN, TAMANO_SUBTITULO_MENU, Tema.TINTA_SUAVE);
+		encabezado.add(titulo);
+		encabezado.add(Box.createVerticalStrut(Tema.SEPARACION_ENCABEZADO));
+		encabezado.add(subtitulo);
+		return fijarAltoMaximo(encabezado);
+	}
+
+	private JPanel seccion(String titulo, JPanel contenido) {
+		JPanel seccion = Tema.panelVertical();
+		JLabel etiqueta = Tema.etiqueta(titulo, Font.BOLD, Tema.TAMANO_TITULO_SECCION, Tema.TINTA_SUAVE);
+		etiqueta.setFont(Tema.fuenteConEspaciado(Tema.TAMANO_TITULO_SECCION, true, Tema.ESPACIADO_SECCION));
+		seccion.add(etiqueta);
+		seccion.add(Box.createVerticalStrut(Tema.SEPARACION_MEDIA));
+		seccion.add(contenido);
+		return fijarAltoMaximo(seccion);
+	}
+
+	private JPanel grilla(Iterable<? extends JComponent> elementos) {
+		List<JComponent> lista = new ArrayList<>();
+		elementos.forEach(lista::add);
+		JPanel grilla = new JPanel(new GridLayout(1, lista.size(), Tema.SEPARACION_TARJETAS, 0));
+		grilla.setOpaque(false);
+		grilla.setAlignmentX(Component.LEFT_ALIGNMENT);
+		lista.forEach(grilla::add);
+		return grilla;
+	}
+
+	private JSlider crearSliderRondas() {
+		JSlider slider = new JSlider(Constantes.MIN_RONDAS, Constantes.MAX_RONDAS, Constantes.RONDAS_POR_DEFECTO);
+		slider.setName("rondas");
+		slider.setOpaque(false);
+		slider.setBackground(Tema.FONDO);
+		slider.setForeground(Tema.TINTA);
+		slider.setFont(Tema.fuente(Font.BOLD, Tema.TAMANO_TEXTO_AYUDA));
+		slider.setMajorTickSpacing(1);
+		slider.setPaintTicks(true);
+		slider.setPaintLabels(true);
+		slider.setSnapToTicks(true);
+		return slider;
+	}
+
+	private JPanel panelSliderRondas() {
+		JPanel contenedor = Tema.panelHorizontal();
+		contenedor.setAlignmentX(Component.LEFT_ALIGNMENT);
+		sliderRondas.addChangeListener(evento -> {
+			actualizarEtiquetaRondas();
+			actualizarResumen();
+		});
+		contenedor.add(sliderRondas);
+		contenedor.add(Box.createHorizontalStrut(Tema.SEPARACION_MEDIA));
+		contenedor.add(etiquetaRondas);
+		return contenedor;
+	}
+
+	private JPanel pie() {
+		JPanel pie = Tema.panelVertical();
+		estadoMensaje.setHorizontalAlignment(SwingConstants.CENTER);
+		estadoMensaje.setPreferredSize(new Dimension(0, ALTO_LINEA_RESUMEN));
+		estadoMensaje.setMinimumSize(estadoMensaje.getPreferredSize());
+		estadoMensaje.setMaximumSize(new Dimension(Integer.MAX_VALUE, ALTO_LINEA_RESUMEN));
+		jugar.setAlignmentX(Component.LEFT_ALIGNMENT);
+		jugar.setMaximumSize(new Dimension(Integer.MAX_VALUE, jugar.getPreferredSize().height));
+		pie.add(estadoMensaje);
+		pie.add(Box.createVerticalStrut(Tema.SEPARACION_ENCABEZADO));
+		pie.add(jugar);
+		return fijarAltoMaximo(pie);
+	}
+
+	private TarjetaOpcion<ModoJuego> crearTarjetaModo(ModoJuego modo, String titulo, String descripcion) {
+		TipoIcono tipo = modo == ModoJuego.UN_JUGADOR ? TipoIcono.PERSONA : TipoIcono.PERSONAS;
+		IconoLineal icono = new IconoLineal(tipo, Tema.TAMANO_ICONO_TARJETA, Tema.TINTA);
+		JPanel contenido = crearContenidoModo(icono, titulo, descripcion);
+		TarjetaOpcion<ModoJuego> tarjeta = new TarjetaOpcion<>(modo, contenido, titulo, descripcion);
+		tarjeta.addItemListener(evento -> icono.establecerColor(tarjeta.isSelected() ? Tema.ACENTO : Tema.TINTA));
+		tamanoTarjeta(tarjeta, ALTO_TARJETA_MODO);
+		return tarjeta;
+	}
+
+	private JPanel crearContenidoModo(IconoLineal icono, String titulo, String descripcion) {
+		JPanel panel = new JPanel(new BorderLayout(Tema.SEPARACION_TARJETAS, 0));
+		panel.setOpaque(false);
+		panel.setBorder(BorderFactory.createEmptyBorder(Tema.RELLENO_TARJETA,
+				Tema.RELLENO_TARJETA, Tema.RELLENO_TARJETA, Tema.RELLENO_TARJETA));
+		panel.add(new JLabel(icono), BorderLayout.WEST);
+		panel.add(crearCopiaModo(titulo, descripcion), BorderLayout.CENTER);
 		return panel;
 	}
 
-	private void mostrarEstado(String texto, java.awt.Color color) {
+	private JPanel crearCopiaModo(String titulo, String descripcion) {
+		JPanel copia = Tema.panelVertical();
+		copia.add(Box.createVerticalGlue());
+		copia.add(Tema.etiqueta(titulo, Font.BOLD, Tema.TAMANO_TITULO_TARJETA, Tema.TINTA));
+		copia.add(Box.createVerticalStrut(Tema.DESPLAZAMIENTO_FOCO));
+		copia.add(Tema.etiqueta(descripcion, Font.PLAIN, Tema.TAMANO_TEXTO_TARJETA, Tema.TINTA_SUAVE));
+		copia.add(Box.createVerticalGlue());
+		return copia;
+	}
+
+	private TarjetaOpcion<Controles> crearTarjetaControles(Controles valor) {
+		JPanel contenido = new JPanel(new BorderLayout());
+		contenido.setOpaque(false);
+		contenido.setBorder(BorderFactory.createEmptyBorder(Tema.SEPARACION_MEDIA,
+				Tema.RELLENO_TARJETA, RELLENO_INFERIOR_TECLAS, Tema.RELLENO_TARJETA));
+		contenido.add(Tema.etiqueta(valor.toString(), Font.BOLD,
+				Tema.TAMANO_TITULO_TARJETA, Tema.TINTA), BorderLayout.NORTH);
+		contenido.add(crearTeclado(valor), BorderLayout.CENTER);
+		TarjetaOpcion<Controles> tarjeta = new TarjetaOpcion<>(valor, contenido,
+				valor.toString(), "Elegir controles " + valor);
+		tamanoTarjeta(tarjeta, ALTO_TARJETA_CONTROLES);
+		return tarjeta;
+	}
+
+	private JPanel crearTeclado(Controles valor) {
+		JPanel teclado = Tema.panelVertical();
+		teclado.add(Box.createVerticalGlue());
+		teclado.add(Tema.centrar(teclaControl(valor, 0)));
+		teclado.add(Box.createVerticalStrut(Tema.SEPARACION_TECLAS));
+		teclado.add(Tema.centrar(crearFilaTeclasInferiores(valor)));
+		return teclado;
+	}
+
+	private JPanel crearFilaTeclasInferiores(Controles valor) {
+		JPanel fila = Tema.panelHorizontal();
+		for (int indice = 1; indice < CANTIDAD_TECLAS_CONTROL; indice++) {
+			if (indice > 1) {
+				fila.add(Box.createHorizontalStrut(Tema.SEPARACION_TECLAS));
+			}
+			fila.add(teclaControl(valor, indice));
+		}
+		return fila;
+	}
+
+	private TeclaVisual teclaControl(Controles valor, int indice) {
+		if (valor == Controles.WASD) {
+			String[] letras = {"W", "A", "S", "D"};
+			return new TeclaVisual(letras[indice], Tema.TAMANO_TECLA_MENU, Tema.TAMANO_TECLA_MENU);
+		}
+		TipoIcono[] flechas = {
+			TipoIcono.FLECHA_ARRIBA, TipoIcono.FLECHA_IZQUIERDA,
+			TipoIcono.FLECHA_ABAJO, TipoIcono.FLECHA_DERECHA
+		};
+		return new TeclaVisual(flechas[indice], Tema.TAMANO_TECLA_MENU);
+	}
+
+	private TarjetaOpcion<Dificultad> crearTarjetaDificultad(Dificultad valor) {
+		TextoDificultad copia = copiaDificultad(valor);
+		JPanel contenido = crearContenidoDificultad(valor, copia);
+		TarjetaOpcion<Dificultad> tarjeta = new TarjetaOpcion<>(valor, contenido,
+				copia.titulo(), copia.descripcion());
+		tamanoTarjeta(tarjeta, ALTO_TARJETA_DIFICULTAD);
+		return tarjeta;
+	}
+
+	private JPanel crearContenidoDificultad(Dificultad valor, TextoDificultad copia) {
+		JPanel contenido = Tema.panelVertical();
+		contenido.setBorder(BorderFactory.createEmptyBorder(Tema.SEPARACION_MEDIA,
+				Tema.RELLENO_TARJETA, Tema.SEPARACION_MEDIA, Tema.RELLENO_TARJETA));
+		contenido.add(Tema.etiqueta(copia.titulo(), Font.BOLD, Tema.TAMANO_TITULO_TARJETA, Tema.TINTA));
+		contenido.add(Box.createVerticalStrut(Tema.DESPLAZAMIENTO_FOCO));
+		contenido.add(Tema.etiqueta(valor.tamano() + "×" + valor.tamano(),
+				Font.BOLD, TAMANO_VALOR_TARJETA, Tema.TINTA));
+		contenido.add(Box.createVerticalGlue());
+		contenido.add(Tema.etiqueta(copia.primeraLinea(), Font.PLAIN, Tema.TAMANO_TEXTO_TARJETA, Tema.TINTA_SUAVE));
+		contenido.add(Tema.etiqueta(copia.segundaLinea(), Font.PLAIN, Tema.TAMANO_TEXTO_TARJETA, Tema.TINTA_SUAVE));
+		return contenido;
+	}
+
+	private void elegirModo(ModoJuego modo) {
+		modoSeleccionadoActual = modo;
+		actualizarResumen();
+		alCambiarModo.accept(modo);
+	}
+
+	private void elegirControles(Controles valor) {
+		controlesSeleccionados = valor;
+		actualizarResumen();
+	}
+
+	private void elegirDificultad(Dificultad valor) {
+		dificultadSeleccionada = valor;
+		actualizarResumen();
+	}
+
+	private void actualizarEtiquetaRondas() {
+		int rondas = cantidadRondas();
+		etiquetaRondas.setText(rondas + (rondas == 1 ? " ronda" : " rondas"));
+	}
+
+	private void actualizarResumen() {
+		int rondas = cantidadRondas();
+		String resumen = controlesSeleccionados + " · " + copiaDificultad(dificultadSeleccionada).titulo()
+				+ " " + dificultadSeleccionada.tamano() + "×" + dificultadSeleccionada.tamano()
+				+ " · Al mejor de " + rondas + (rondas == 1 ? " ronda" : " rondas");
+		mostrarEstado(resumen, Tema.TINTA_SUAVE);
+	}
+
+	private void mostrarEstado(String texto, Color color) {
 		estadoMensaje.setText(texto);
 		estadoMensaje.setForeground(color);
-		tarjetasMensaje.show(mensaje, ESTADO_MENSAJE);
 	}
 
-	private static JPanel panelVertical() {
-		JPanel resultado = new JPanel();
-		resultado.setLayout(new BoxLayout(resultado, BoxLayout.Y_AXIS));
-		resultado.setOpaque(false);
-		resultado.setAlignmentX(Component.LEFT_ALIGNMENT);
-		return resultado;
+	private static void tamanoTarjeta(JComponent tarjeta, int alto) {
+		Dimension dimension = new Dimension(0, alto);
+		tarjeta.setPreferredSize(dimension);
+		tarjeta.setMinimumSize(dimension);
 	}
 
-	private static JPanel ajustarTamano(JPanel panel, int alto) {
-		panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, alto));
+	private static JPanel fijarAltoMaximo(JPanel panel) {
+		panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, panel.getPreferredSize().height));
 		return panel;
 	}
 
-	private static JLabel etiqueta(String texto, int tamano, boolean negrita,
-			java.awt.Color color) {
-		JLabel etiqueta = new JLabel(texto);
-		etiqueta.setFont(Tema.fuente(tamano, negrita));
-		etiqueta.setForeground(color);
-		etiqueta.setAlignmentX(Component.LEFT_ALIGNMENT);
-		return etiqueta;
+	private static TextoDificultad copiaDificultad(Dificultad dificultad) {
+		return switch (dificultad) {
+			case FACIL -> new TextoDificultad("Fácil", "Tablero chico, recorrido directo.",
+					"Tablero chico,", "recorrido directo.");
+			case MEDIA -> new TextoDificultad("Media", "Tablero mediano, hay que planificar.",
+					"Tablero mediano,", "hay que planificar.");
+			case DIFICIL -> new TextoDificultad("Difícil", "Tablero grande, cada giro cuenta.",
+					"Tablero grande,", "cada giro cuenta.");
+		};
+	}
+
+	private record TextoDificultad(String titulo, String descripcion, String primeraLinea,
+			String segundaLinea) {
 	}
 }
