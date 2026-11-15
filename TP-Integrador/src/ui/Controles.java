@@ -14,7 +14,10 @@ public enum Controles {
 			Direccion.ARRIBA, KeyEvent.VK_W,
 			Direccion.DERECHA, KeyEvent.VK_D,
 			Direccion.ABAJO, KeyEvent.VK_S,
-			Direccion.IZQUIERDA, KeyEvent.VK_A));
+			Direccion.IZQUIERDA, KeyEvent.VK_A)),
+	MOUSE("Mouse", "Arrastrar", Map.of());
+
+	private static final String SIN_TECLAS = "Los controles de Mouse no usan teclas de dirección.";
 
 	private final String etiqueta;
 	private final String leyenda;
@@ -26,7 +29,14 @@ public enum Controles {
 		this.teclas = teclas;
 	}
 
+	public boolean usaMouse() {
+		return this == MOUSE;
+	}
+
 	public int tecla(Direccion direccion) {
+		if (usaMouse()) {
+			throw new IllegalStateException(SIN_TECLAS);
+		}
 		return teclas.get(direccion);
 	}
 

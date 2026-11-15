@@ -7,11 +7,13 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.geom.RoundRectangle2D;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import javax.swing.JPanel;
 import model.Celda;
 import model.EstadoJuego;
@@ -64,6 +66,18 @@ final class PanelTablero extends JPanel {
 		this.manchadoPorTomate = manchado;
 		actualizarVisitadas(nuevoEstado);
 		repaint();
+	}
+
+	Optional<EstadoJuego> estadoActual() {
+		return Optional.ofNullable(estado);
+	}
+
+	/** Celda bajo el punto, o vacío si cae fuera de la grilla o entre celdas. */
+	Optional<Celda> celdaEn(Point punto) {
+		if (estado == null) {
+			return Optional.empty();
+		}
+		return geometria().celdaEn(punto);
 	}
 
 	private void actualizarVisitadas(EstadoJuego nuevoEstado) {
@@ -246,5 +260,23 @@ final class PanelTablero extends JPanel {
 		int y(int fila) { return supGrilla + fila * (celda + SEPARACION_CELDAS); }
 		int centroX(int col) { return x(col) + celda / 2; }
 		int centroY(int fila) { return y(fila) + celda / 2; }
+
+		Optional<Celda> celdaEn(Point punto) {
+			int columna = indiceEn(punto.x - izqGrilla);
+			int fila = indiceEn(punto.y - supGrilla);
+			if (columna < 0 || fila < 0) {
+				return Optional.empty();
+			}
+			return Optional.of(new Celda(fila, columna));
+		}
+
+		private int indiceEn(int desplazamiento) {
+			int paso = celda + SEPARACION_CELDAS;
+			if (desplazamiento < 0 || desplazamiento % paso >= celda) {
+				return -1;
+			}
+			int indice = desplazamiento / paso;
+			return indice < tamanoNivel ? indice : -1;
+		}
 	}
 }

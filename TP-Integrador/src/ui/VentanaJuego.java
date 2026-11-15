@@ -45,8 +45,12 @@ public final class VentanaJuego implements AutoCloseable {
 	private final CapaVictoria victoria = new CapaVictoria(this::jugarDeNuevo, this::menu);
 
 	public VentanaJuego() {
-		this.juego = new PanelJuego(d -> publicar(TipoEvento.MOVIMIENTO, d),
-				() -> publicar(TipoEvento.DESHACER, null), () -> publicar(TipoEvento.REINICIAR, null), this::menu);
+		this.juego = new PanelJuego(
+				d -> publicar(TipoEvento.MOVIMIENTO, d),
+				dest -> publicar(TipoEvento.IR_A_CELDA, dest),
+				() -> publicar(TipoEvento.DESHACER, null),
+				() -> publicar(TipoEvento.REINICIAR, null),
+				this::menu);
 		contenido.add(configuracion, CONFIGURACION);
 		contenido.add(multijugador, MULTIJUGADOR);
 		contenido.add(juego, JUEGO);

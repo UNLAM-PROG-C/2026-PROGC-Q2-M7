@@ -19,11 +19,13 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import controller.ActualizacionVista;
+import events.DestinoCelda;
 import model.Direccion;
 import model.EstadoJuego;
 
 final class PanelJuego extends JPanel {
 	private static final long serialVersionUID = 1L;
+	private static final String AYUDA_MOUSE = "Arrastrá desde el camino · volvé atrás para deshacer";
 	private static final int RELLENO_CHIP_V = 10;
 	private static final int RELLENO_CHIP_H = 14;
 	private static final int SEPARACION_PIE = 6;
@@ -37,25 +39,36 @@ final class PanelJuego extends JPanel {
 	private final JLabel estadoMensaje = crearEtiquetaCentrada(" ", "estado-mensaje");
 	private final JButton deshacer = Tema.boton("Deshacer", false);
 	private final JButton reiniciar = Tema.boton("Reiniciar", false);
+	private final transient AdaptadorMouse adaptadorMouse = new AdaptadorMouse(tablero, this::irA);
 	private final transient Consumer<Direccion> mover;
+	private final transient Consumer<DestinoCelda> irA;
 	private Controles controlesActuales;
 	private boolean jugando;
 
-	PanelJuego(Consumer<Direccion> mover, Runnable accionDeshacer,
-			Runnable accionReiniciar, Runnable volver) {
+	PanelJuego(Consumer<Direccion> mover, Consumer<DestinoCelda> irA,
+			Runnable accionDeshacer, Runnable accionReiniciar, Runnable volver) {
 		super(new BorderLayout(0, Tema.ESPACIO));
 		this.mover = mover;
+		this.irA = irA;
 		setName("juego");
 		setBackground(Tema.FONDO);
 		setBorder(BorderFactory.createEmptyBorder(Tema.MARGEN, Tema.MARGEN, Tema.MARGEN, Tema.MARGEN));
-		tablero.setFocusable(true);
-		progreso.setStringPainted(true);
-		vincularBoton(deshacer, "deshacer", accionDeshacer);
-		vincularBoton(reiniciar, "reiniciar", accionReiniciar);
+		configurarEntradas(accionDeshacer, accionReiniciar);
 		add(encabezado(volver), BorderLayout.NORTH);
 		add(tablero, BorderLayout.CENTER);
 		add(pie(), BorderLayout.SOUTH);
 		controles(Controles.FLECHAS);
+	}
+
+	private void configurarEntradas(Runnable accionDeshacer, Runnable accionReiniciar) {
+		tablero.setFocusable(true);
+		adaptadorMouse.instalar();
+		progreso.setStringPainted(true);
+		vincularBoton(deshacer, "deshacer", accionDeshacer);
+		vincularBoton(reiniciar, "reiniciar", () -> {
+			adaptadorMouse.habilitar(controlesActuales == Controles.MOUSE);
+			accionReiniciar.run();
+		});
 	}
 
 	private void vincularBoton(JButton boton, String nombre, Runnable accion) {
@@ -112,15 +125,29 @@ final class PanelJuego extends JPanel {
 	}
 
 	void controles(Controles controles) {
-		if (controles == controlesActuales) { return; }
+		adaptadorMouse.habilitar(controles.usaMouse());
+		if (controles == controlesActuales) {
+			return;
+		}
 		this.controlesActuales = controles;
 		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
 		getActionMap().clear();
-		for (Direccion dir : Direccion.values()) {
-			vincular("mover-" + dir, controles.tecla(dir), () -> { if (jugando) { mover.accept(dir); } });
+		if (!controles.usaMouse()) {
+			vincularDirecciones(controles);
 		}
 		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::doClick);
-		leyenda.setText(controles.leyendaTeclas() + " · Backspace = deshacer");
+		leyenda.setText((controles.usaMouse() ? AYUDA_MOUSE : controles.leyendaTeclas())
+				+ " · Backspace = deshacer");
+	}
+
+	private void vincularDirecciones(Controles controles) {
+		for (Direccion dir : Direccion.values()) {
+			vincular("mover-" + dir, controles.tecla(dir), () -> {
+				if (jugando) {
+					mover.accept(dir);
+				}
+			});
+		}
 	}
 
 	private void vincular(String nombre, int tecla, Runnable accion) {
@@ -130,12 +157,22 @@ final class PanelJuego extends JPanel {
 
 			@Override
 			public void actionPerformed(ActionEvent evento) {
-				JRootPane raiz = SwingUtilities.getRootPane(PanelJuego.this);
-				if (raiz == null || raiz.getGlassPane() == null || !raiz.getGlassPane().isVisible()) {
+				if (entradaHabilitada()) {
 					accion.run();
 				}
 			}
 		});
+	}
+
+	private void irA(DestinoCelda destino) {
+		if (jugando && entradaHabilitada()) {
+			irA.accept(destino);
+		}
+	}
+
+	private boolean entradaHabilitada() {
+		JRootPane raiz = SwingUtilities.getRootPane(this);
+		return raiz == null || raiz.getGlassPane() == null || !raiz.getGlassPane().isVisible();
 	}
 
 	void mostrar(ActualizacionVista act) {
