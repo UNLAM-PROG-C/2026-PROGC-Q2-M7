@@ -83,12 +83,15 @@ public final class VentanaJuego implements AutoCloseable {
 		long intento = prepararPartida(ModoJuego.UN_JUGADOR, dificultad);
 		configuracion.ocupado(true);
 		arrancarMotor(Constantes.ROL_LOCAL, Constantes.IP_LOCAL, Constantes.PUERTO,
-				configuracion.cantidadRondas(), intento, "No se pudo iniciar el juego: ");
+				configuracion.cantidadRondas(), 1, intento, "No se pudo iniciar el juego: ");
 	}
 
 	private void iniciarHost() {
-		iniciarEnRed(Constantes.ROL_HOST, Constantes.IP_LOCAL, Constantes.PUERTO,
-				"Esperando rival en puerto " + Constantes.PUERTO
+		int jugadores = multijugador.cantidadJugadores();
+		int rivales = jugadores - 1;
+		String textoRivales = rivales == 1 ? "rival" : rivales + " rivales";
+		iniciarEnRed(Constantes.ROL_HOST, Constantes.IP_LOCAL, Constantes.PUERTO, jugadores,
+				"Esperando " + textoRivales + " en puerto " + Constantes.PUERTO
 						+ " (Rondas: " + configuracion.cantidadRondas() + ")...");
 	}
 
@@ -105,7 +108,8 @@ public final class VentanaJuego implements AutoCloseable {
 		String host = rawHost.isEmpty() ? Constantes.IP_LOCAL : rawHost;
 		int puerto = sep < 0 ? Constantes.PUERTO : leerPuerto(limpio.substring(sep + 1).trim());
 		if (puerto > 0) {
-			iniciarEnRed(Constantes.ROL_CLIENTE, host, puerto, "Conectando a " + host + ":" + puerto + "...");
+			iniciarEnRed(Constantes.ROL_CLIENTE, host, puerto, Constantes.JUGADORES_RED_POR_DEFECTO,
+					"Conectando a " + host + ":" + puerto + "...");
 		}
 	}
 
@@ -118,14 +122,14 @@ public final class VentanaJuego implements AutoCloseable {
 		return -1;
 	}
 
-	private void iniciarEnRed(int rol, String host, int puerto, String estadoInicial) {
+	private void iniciarEnRed(int rol, String host, int puerto, int jugadores, String estadoInicial) {
 		long intento = prepararPartida(ModoJuego.MULTIJUGADOR, configuracion.dificultadSeleccionada());
 		int rondas = configuracion.cantidadRondas();
 		multijugador.ocupado(true);
 		multijugador.estado(estadoInicial);
 		boolean esHost = rol == Constantes.ROL_HOST;
 		String prefijo = esHost ? "Espera cancelada o error: " : "Error al conectar con host: ";
-		Thread hilo = new Thread(() -> arrancarMotor(rol, host, puerto, rondas, intento, prefijo),
+		Thread hilo = new Thread(() -> arrancarMotor(rol, host, puerto, rondas, jugadores, intento, prefijo),
 				esHost ? "Thread-Conexion-Host" : "Thread-Conexion-Cliente");
 		if (esHost) { GestorRed.registrarEspera(hilo); }
 		hilo.start();
@@ -139,12 +143,14 @@ public final class VentanaJuego implements AutoCloseable {
 		return intentoConexion.get();
 	}
 
-	private void arrancarMotor(int rol, String host, int puerto, int rondas, long intento, String prefijoError) {
+	private void arrancarMotor(int rol, String host, int puerto, int rondas, int jugadores,
+			long intento, String prefijoError) {
 		try {
 			if (intento != intentoConexion.get()) { return; }
 			EventBus bus = new EventBus();
-			MotorJuego motor = new MotorJuego(rol, host, puerto, rondas, bus, act -> recibir(intento, act));
-			registrarMotor(bus, motor, intento);
+			MotorJuego motor = new MotorJuego(rol, host, puerto, rondas, jugadores, bus,
+					act -> recibir(intento, act));
+			registrarMotor(rol, bus, motor, intento);
 		} catch (IOException e) {
 			reportarErrorConexion(intento, rol, prefijoError + e.getMessage());
 		} finally {
@@ -152,18 +158,25 @@ public final class VentanaJuego implements AutoCloseable {
 		}
 	}
 
-	private void registrarMotor(EventBus bus, MotorJuego motor, long intento) {
-		boolean aceptado = false;
-		synchronized (lockConexion) {
-			if (intento == intentoConexion.get()) {
-				this.busActual = bus;
-				this.motorActual = motor;
-				motor.iniciar();
-				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
-				aceptado = true;
-			}
+	private void registrarMotor(int rol, EventBus bus, MotorJuego motor, long intento) {
+		if (!activarMotor(rol, bus, motor, intento)) {
+			motor.finalizar();
+		} else if (rol == Constantes.ROL_CLIENTE) {
+			SwingUtilities.invokeLater(() -> multijugador.estado("Conectado. Esperando inicio del host..."));
 		}
-		if (!aceptado) { motor.finalizar(); }
+	}
+
+	private boolean activarMotor(int rol, EventBus bus, MotorJuego motor, long intento) {
+		synchronized (lockConexion) {
+			if (intento != intentoConexion.get()) { return false; }
+			this.busActual = bus;
+			this.motorActual = motor;
+			motor.iniciar();
+			if (rol != Constantes.ROL_CLIENTE) {
+				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
+			}
+			return true;
+		}
 	}
 
 	private void reportarErrorConexion(long intento, int rol, String mensaje) {

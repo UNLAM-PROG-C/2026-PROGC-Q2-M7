@@ -1,5 +1,6 @@
 package ui;
 
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -9,6 +10,8 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import utils.Constantes;
 
 final class PanelMultijugador extends JPanel {
@@ -20,6 +23,11 @@ final class PanelMultijugador extends JPanel {
 			+ "Elegí si querés alojar la partida esperando en el puerto " + Constantes.PUERTO
 			+ " o conectarte como cliente.</div></html>";
 
+	private final JSpinner jugadores = new JSpinner(new SpinnerNumberModel(
+			Constantes.JUGADORES_RED_POR_DEFECTO,
+			Constantes.MIN_JUGADORES_RED,
+			Constantes.MAX_JUGADORES_RED,
+			1));
 	private final JButton host = Tema.boton(TEXTO_HOST, true);
 	private final JButton cliente = Tema.boton(TEXTO_CLIENTE, true);
 	private final JButton volver = Tema.boton("Volver / Cancelar", false);
@@ -33,7 +41,12 @@ final class PanelMultijugador extends JPanel {
 		construirContenido(alCrearPartida, alUnirseAPartida, alVolver);
 	}
 
+	int cantidadJugadores() {
+		return (Integer) jugadores.getValue();
+	}
+
 	void ocupado(boolean ocupado) {
+		jugadores.setEnabled(!ocupado);
 		host.setEnabled(!ocupado);
 		cliente.setEnabled(!ocupado);
 		host.setText(ocupado ? "Conectando…" : TEXTO_HOST);
@@ -57,12 +70,22 @@ final class PanelMultijugador extends JPanel {
 		JLabel desc = Tema.etiqueta(DESCRIPCION, Font.PLAIN, Tema.TAMANO_SUBTITULO, Tema.TINTA_SUAVE);
 		desc.setName("multijugador-descripcion");
 		agregar(desc, Tema.MARGEN, 0);
+		agregar(crearSelectorJugadores(), Tema.ESPACIO, 0);
 		agregar(boton(host, "crear-host", alCrear), Tema.ESPACIO, MARGEN_BOTON);
 		agregar(boton(cliente, "unirse-cliente", alUnirse), Tema.ESPACIO, MARGEN_BOTON);
 		estadoMensaje.setName("estado-multijugador");
 		estadoMensaje.setHorizontalAlignment(JLabel.CENTER);
 		agregar(estadoMensaje, Tema.ESPACIO, 0);
 		agregar(boton(volver, "multijugador-volver", alVolver), 0, 0);
+	}
+
+	private JPanel crearSelectorJugadores() {
+		JPanel fila = Tema.panelBorde(new FlowLayout(FlowLayout.CENTER, Tema.ESPACIO, 0), 0, 0);
+		jugadores.setName("host-jugadores");
+		jugadores.setFont(Tema.fuente(Font.BOLD, Tema.TAMANO_TEXTO));
+		fila.add(Tema.etiqueta("Jugadores en la sala (2 a 4):", Font.PLAIN, Tema.TAMANO_TEXTO, Tema.TINTA));
+		fila.add(jugadores);
+		return fila;
 	}
 
 	private void agregar(JComponent comp, int abajo, int margenH) {
