@@ -79,8 +79,8 @@ public final class VentanaJuego implements AutoCloseable {
 		});
 	}
 
-	private void iniciar(Controles controles, Dificultad dificultad) {
-		long intento = prepararPartida(ModoJuego.UN_JUGADOR, dificultad, controles);
+	private void iniciar(Dificultad dificultad) {
+		long intento = prepararPartida(ModoJuego.UN_JUGADOR, dificultad);
 		configuracion.ocupado(true);
 		arrancarMotor(Constantes.ROL_LOCAL, Constantes.IP_LOCAL, Constantes.PUERTO,
 				configuracion.cantidadRondas(), intento, "No se pudo iniciar el juego: ");
@@ -119,8 +119,7 @@ public final class VentanaJuego implements AutoCloseable {
 	}
 
 	private void iniciarEnRed(int rol, String host, int puerto, String estadoInicial) {
-		long intento = prepararPartida(ModoJuego.MULTIJUGADOR,
-				configuracion.dificultadSeleccionada(), configuracion.controlesSeleccionados());
+		long intento = prepararPartida(ModoJuego.MULTIJUGADOR, configuracion.dificultadSeleccionada());
 		int rondas = configuracion.cantidadRondas();
 		multijugador.ocupado(true);
 		multijugador.estado(estadoInicial);
@@ -132,12 +131,11 @@ public final class VentanaJuego implements AutoCloseable {
 		hilo.start();
 	}
 
-	private long prepararPartida(ModoJuego modo, Dificultad dificultad, Controles controles) {
+	private long prepararPartida(ModoJuego modo, Dificultad dificultad) {
 		victoria.ocultarSuperposicion();
 		abandonar();
 		this.modoActual = modo;
 		this.dificultadActual = dificultad;
-		juego.controles(controles);
 		return intentoConexion.get();
 	}
 

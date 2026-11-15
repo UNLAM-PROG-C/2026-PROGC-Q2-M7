@@ -7,7 +7,6 @@ import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -38,10 +37,9 @@ final class PanelConfiguracion extends JPanel {
 	private final JLabel estadoMensaje = Tema.etiqueta(" ", Font.PLAIN, Tema.TAMANO_TEXTO, Tema.TINTA_SUAVE);
 	private final JButton jugar = Tema.boton("Jugar", true);
 
-	private Controles controlesSeleccionados = Controles.FLECHAS;
 	private Dificultad dificultadSeleccionada = Dificultad.MEDIA;
 
-	PanelConfiguracion(BiConsumer<Controles, Dificultad> alIniciar, Consumer<ModoJuego> alCambiarModo) {
+	PanelConfiguracion(Consumer<Dificultad> alIniciar, Consumer<ModoJuego> alCambiarModo) {
 		super(new BorderLayout(0, Tema.ESPACIO));
 		setName("configuracion");
 		setBackground(Tema.FONDO);
@@ -51,7 +49,7 @@ final class PanelConfiguracion extends JPanel {
 		estadoMensaje.setHorizontalAlignment(JLabel.CENTER);
 		estadoMensaje.setVerticalAlignment(JLabel.BOTTOM);
 		jugar.setName("iniciar");
-		jugar.addActionListener(e -> alIniciar.accept(controlesSeleccionados, dificultadSeleccionada));
+		jugar.addActionListener(e -> alIniciar.accept(dificultadSeleccionada));
 		add(estadoMensaje, BorderLayout.CENTER);
 		add(jugar, BorderLayout.SOUTH);
 		actualizar();
@@ -61,10 +59,6 @@ final class PanelConfiguracion extends JPanel {
 		String nombre = "modo-" + modo.name().toLowerCase(Locale.ROOT).replace('_', '-');
 		tarjetas.stream().filter(t -> nombre.equals(t.getName())).findFirst().ifPresent(t -> t.setSelected(true));
 		actualizar();
-	}
-
-	Controles controlesSeleccionados() {
-		return controlesSeleccionados;
 	}
 
 	Dificultad dificultadSeleccionada() {
@@ -100,7 +94,6 @@ final class PanelConfiguracion extends JPanel {
 		titulo.setAlignmentX(JComponent.LEFT_ALIGNMENT);
 		cuerpo.add(titulo);
 		grupo("MODO DE JUEGO", ModoJuego.UN_JUGADOR, "modo-", alCambiarModo);
-		grupo("CONTROLES", controlesSeleccionados, "controles-", c -> controlesSeleccionados = c);
 		grupo("DIFICULTAD", dificultadSeleccionada, "dificultad-", d -> dificultadSeleccionada = d);
 		seccion("RONDAS PARA GANAR", panelSliderRondas());
 		add(cuerpo, BorderLayout.NORTH);
@@ -166,7 +159,7 @@ final class PanelConfiguracion extends JPanel {
 		String sufijo = rondas + (rondas == 1 ? " ronda" : " rondas");
 		etiquetaRondas.setText(sufijo);
 		Dificultad d = dificultadSeleccionada;
-		estadoMensaje.setText(controlesSeleccionados + " · " + DIFICULTADES[d.ordinal()][0]
+		estadoMensaje.setText(DIFICULTADES[d.ordinal()][0]
 				+ " " + d.tamano() + "×" + d.tamano() + " · Al mejor de " + sufijo);
 		estadoMensaje.setForeground(Tema.TINTA_SUAVE);
 	}
@@ -176,8 +169,6 @@ final class PanelConfiguracion extends JPanel {
 		if (valor instanceof ModoJuego m) {
 			cuerpo = m == ModoJuego.UN_JUGADOR ? "<b>Un jugador</b><br><span style='color:#4A5073'>A tu ritmo."
 					: "<b>Multijugador</b><br><span style='color:#4A5073'>Jugá con otras personas.";
-		} else if (valor instanceof Controles c) {
-			cuerpo = "<b>" + c + "</b><br><span style='color:#4A5073'><big>" + c.leyendaTeclas() + "</big>";
 		} else {
 			Dificultad d = (Dificultad) valor;
 			cuerpo = "<b>" + DIFICULTADES[d.ordinal()][0] + "<br><big>" + d.tamano() + "×" + d.tamano()

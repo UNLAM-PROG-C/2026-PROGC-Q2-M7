@@ -25,7 +25,7 @@ import model.EstadoJuego;
 
 final class PanelJuego extends JPanel {
 	private static final long serialVersionUID = 1L;
-	private static final String AYUDA_MOUSE = "Arrastrá desde el camino · volvé atrás para deshacer";
+	private static final String AYUDA_CONTROLES = "Flechas / WASD / Mouse · Backspace = deshacer";
 	private static final int RELLENO_CHIP_V = 10;
 	private static final int RELLENO_CHIP_H = 14;
 	private static final int SEPARACION_PIE = 6;
@@ -35,14 +35,13 @@ final class PanelJuego extends JPanel {
 	private final JLabel celdas = crearChip("progreso");
 	private final JLabel siguiente = crearChip("siguiente");
 	private final JProgressBar progreso = new JProgressBar(0, PROGRESO_MAXIMO);
-	private final JLabel leyenda = crearEtiquetaCentrada(" ", null);
+	private final JLabel leyenda = crearEtiquetaCentrada(AYUDA_CONTROLES, null);
 	private final JLabel estadoMensaje = crearEtiquetaCentrada(" ", "estado-mensaje");
 	private final JButton deshacer = Tema.boton("Deshacer", false);
 	private final JButton reiniciar = Tema.boton("Reiniciar", false);
 	private final transient AdaptadorMouse adaptadorMouse = new AdaptadorMouse(tablero, this::irA);
 	private final transient Consumer<Direccion> mover;
 	private final transient Consumer<DestinoCelda> irA;
-	private Controles controlesActuales;
 	private boolean jugando;
 
 	PanelJuego(Consumer<Direccion> mover, Consumer<DestinoCelda> irA,
@@ -57,7 +56,6 @@ final class PanelJuego extends JPanel {
 		add(encabezado(volver), BorderLayout.NORTH);
 		add(tablero, BorderLayout.CENTER);
 		add(pie(), BorderLayout.SOUTH);
-		controles(Controles.FLECHAS);
 	}
 
 	private void configurarEntradas(Runnable accionDeshacer, Runnable accionReiniciar) {
@@ -65,10 +63,8 @@ final class PanelJuego extends JPanel {
 		adaptadorMouse.instalar();
 		progreso.setStringPainted(true);
 		vincularBoton(deshacer, "deshacer", accionDeshacer);
-		vincularBoton(reiniciar, "reiniciar", () -> {
-			adaptadorMouse.habilitar(controlesActuales == Controles.MOUSE);
-			accionReiniciar.run();
-		});
+		vincularBoton(reiniciar, "reiniciar", accionReiniciar);
+		vincularTeclado();
 	}
 
 	private void vincularBoton(JButton boton, String nombre, Runnable accion) {
@@ -124,34 +120,32 @@ final class PanelJuego extends JPanel {
 		return acciones;
 	}
 
-	void controles(Controles controles) {
-		adaptadorMouse.habilitar(controles.usaMouse());
-		if (controles == controlesActuales) {
-			return;
-		}
-		this.controlesActuales = controles;
-		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
-		getActionMap().clear();
-		if (!controles.usaMouse()) {
-			vincularDirecciones(controles);
-		}
+	private void vincularTeclado() {
+		vincularDireccion(Direccion.ARRIBA, KeyEvent.VK_UP, KeyEvent.VK_W);
+		vincularDireccion(Direccion.DERECHA, KeyEvent.VK_RIGHT, KeyEvent.VK_D);
+		vincularDireccion(Direccion.ABAJO, KeyEvent.VK_DOWN, KeyEvent.VK_S);
+		vincularDireccion(Direccion.IZQUIERDA, KeyEvent.VK_LEFT, KeyEvent.VK_A);
 		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::doClick);
-		leyenda.setText((controles.usaMouse() ? AYUDA_MOUSE : controles.leyendaTeclas())
-				+ " · Backspace = deshacer");
 	}
 
-	private void vincularDirecciones(Controles controles) {
-		for (Direccion dir : Direccion.values()) {
-			vincular("mover-" + dir, controles.tecla(dir), () -> {
-				if (jugando) {
-					mover.accept(dir);
-				}
-			});
-		}
+	private void vincularDireccion(Direccion dir, int flecha, int wasd) {
+		String nombre = "mover-" + dir;
+		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(flecha, 0), nombre);
+		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(wasd, 0), nombre);
+		registrarAccion(nombre, () -> {
+			if (jugando) {
+				adaptadorMouse.reiniciarGesto();
+				mover.accept(dir);
+			}
+		});
 	}
 
 	private void vincular(String nombre, int tecla, Runnable accion) {
 		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(tecla, 0), nombre);
+		registrarAccion(nombre, accion);
+	}
+
+	private void registrarAccion(String nombre, Runnable accion) {
 		getActionMap().put(nombre, new AbstractAction() {
 			private static final long serialVersionUID = 1L;
 
@@ -195,7 +189,10 @@ final class PanelJuego extends JPanel {
 		return texto;
 	}
 
-	void enfocarEntrada() { tablero.requestFocusInWindow(); }
+	void enfocarEntrada() {
+		adaptadorMouse.reiniciarGesto();
+		tablero.requestFocusInWindow();
+	}
 
 	private static JLabel crearChip(String nombre) {
 		JLabel chip = Tema.etiqueta(" ", Font.BOLD, Tema.TAMANO_TEXTO, Tema.TINTA);

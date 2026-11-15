@@ -27,7 +27,6 @@ final class AdaptadorMouse extends MouseAdapter {
 	private Celda ultimaCelda;
 	private Nivel nivelDelGesto;
 	private boolean arrastrando;
-	private boolean habilitado;
 
 	AdaptadorMouse(PanelTablero tablero, Consumer<DestinoCelda> irA) {
 		this.tablero = tablero;
@@ -45,8 +44,7 @@ final class AdaptadorMouse extends MouseAdapter {
 		});
 	}
 
-	void habilitar(boolean habilitado) {
-		this.habilitado = habilitado;
+	void reiniciarGesto() {
 		terminar();
 		ultimaCelda = null;
 		nivelDelGesto = null;
@@ -55,14 +53,14 @@ final class AdaptadorMouse extends MouseAdapter {
 	@Override
 	public void mousePressed(MouseEvent evento) {
 		terminar();
-		if (habilitado && evento.getButton() == MouseEvent.BUTTON1) {
+		if (evento.getButton() == MouseEvent.BUTTON1) {
 			iniciar(evento.getPoint());
 		}
 	}
 
 	@Override
 	public void mouseDragged(MouseEvent evento) {
-		if (!habilitado || !arrastrando) {
+		if (!arrastrando) {
 			return;
 		}
 		tablero.celdaEn(evento.getPoint())
