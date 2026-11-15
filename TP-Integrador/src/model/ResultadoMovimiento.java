@@ -6,7 +6,9 @@ public enum ResultadoMovimiento {
 	CELDA_REPETIDA("No podés repetir una celda visitada."),
 	FUERA_DE_ORDEN("Debés visitar los números en orden."),
 	FINAL_ANTICIPADO("Debés recorrer todas las celdas antes del último número."),
-	FINALIZADO("¡Ganaste! Recorriste todo el tablero en orden.");
+	FINALIZADO("¡Ganaste! Recorriste todo el tablero en orden."),
+	RETROCESO("Volviste a esa celda."),
+	SIN_EFECTO("Esa celda no está al alcance.");
 
 	private final String mensaje;
 

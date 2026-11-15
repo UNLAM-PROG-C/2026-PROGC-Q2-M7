@@ -1,258 +1,218 @@
 package ui;
 
 import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.util.function.Consumer;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
+import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.JRootPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import controller.ActualizacionVista;
+import events.DestinoCelda;
 import model.Direccion;
 import model.EstadoJuego;
 
-final class PanelJuego {
-	private final JPanel panel = new JPanel(new BorderLayout(0, Tema.SEPARACION_JUEGO));
+final class PanelJuego extends JPanel {
+	private static final long serialVersionUID = 1L;
+	private static final String AYUDA_MOUSE = "Arrastrá desde el camino · volvé atrás para deshacer";
+	private static final int RELLENO_CHIP_V = 10;
+	private static final int RELLENO_CHIP_H = 14;
+	private static final int SEPARACION_PIE = 6;
+	private static final int PROGRESO_MAXIMO = 100;
+
 	private final PanelTablero tablero = new PanelTablero();
-	private final IndicadorInformacion celdas = new IndicadorInformacion("Celdas", "progreso");
-	private final IndicadorInformacion siguiente = new IndicadorInformacion("Próximo número", "siguiente");
-	private final BarraProgreso progreso = new BarraProgreso();
-	private final JLabel estadoMensaje = etiqueta(" ", Tema.TAMANO_ESTADO, Tema.TINTA_SUAVE);
-	private final JPanel teclasAyuda = horizontal();
-	private final BotonSecundario deshacer = new BotonSecundario("Deshacer", TipoIcono.DESHACER);
-	private final BotonSecundario reiniciar = new BotonSecundario("Reiniciar", TipoIcono.REINICIAR);
-	private final Consumer<Direccion> mover;
-	private final Runnable accionDeshacer;
+	private final JLabel celdas = crearChip("progreso");
+	private final JLabel siguiente = crearChip("siguiente");
+	private final JProgressBar progreso = new JProgressBar(0, PROGRESO_MAXIMO);
+	private final JLabel leyenda = crearEtiquetaCentrada(" ", null);
+	private final JLabel estadoMensaje = crearEtiquetaCentrada(" ", "estado-mensaje");
+	private final JButton deshacer = Tema.boton("Deshacer", false);
+	private final JButton reiniciar = Tema.boton("Reiniciar", false);
+	private final transient AdaptadorMouse adaptadorMouse = new AdaptadorMouse(tablero, this::irA);
+	private final transient Consumer<Direccion> mover;
+	private final transient Consumer<DestinoCelda> irA;
+	private Controles controlesActuales;
 	private boolean jugando;
 
-	PanelJuego(Consumer<Direccion> mover, Runnable accionDeshacer,
-			Runnable accionReiniciar, Runnable volver) {
+	PanelJuego(Consumer<Direccion> mover, Consumer<DestinoCelda> irA,
+			Runnable accionDeshacer, Runnable accionReiniciar, Runnable volver) {
+		super(new BorderLayout(0, Tema.ESPACIO));
 		this.mover = mover;
-		this.accionDeshacer = accionDeshacer;
-		configurarPanel();
-		panel.add(encabezado(volver), BorderLayout.NORTH);
-		panel.add(tablero, BorderLayout.CENTER);
-		panel.add(pie(accionReiniciar), BorderLayout.SOUTH);
+		this.irA = irA;
+		setName("juego");
+		setBackground(Tema.FONDO);
+		setBorder(BorderFactory.createEmptyBorder(Tema.MARGEN, Tema.MARGEN, Tema.MARGEN, Tema.MARGEN));
+		configurarEntradas(accionDeshacer, accionReiniciar);
+		add(encabezado(volver), BorderLayout.NORTH);
+		add(tablero, BorderLayout.CENTER);
+		add(pie(), BorderLayout.SOUTH);
+		controles(Controles.FLECHAS);
 	}
 
-	private void configurarPanel() {
+	private void configurarEntradas(Runnable accionDeshacer, Runnable accionReiniciar) {
 		tablero.setFocusable(true);
-		panel.setName("juego");
-		panel.setBackground(Tema.FONDO);
-		panel.setBorder(BorderFactory.createEmptyBorder(Tema.RELLENO_VERTICAL_JUEGO,
-				Tema.RELLENO_HORIZONTAL_JUEGO, Tema.RELLENO_VERTICAL_JUEGO,
-				Tema.RELLENO_HORIZONTAL_JUEGO));
-		estadoMensaje.setName("estado-mensaje");
-		deshacer.setName("deshacer");
-		reiniciar.setName("reiniciar");
-		deshacer.agregarEscucha(evento -> accionDeshacer.run());
+		adaptadorMouse.instalar();
+		progreso.setStringPainted(true);
+		vincularBoton(deshacer, "deshacer", accionDeshacer);
+		vincularBoton(reiniciar, "reiniciar", () -> {
+			adaptadorMouse.habilitar(controlesActuales == Controles.MOUSE);
+			accionReiniciar.run();
+		});
+	}
+
+	private void vincularBoton(JButton boton, String nombre, Runnable accion) {
+		boton.setName(nombre);
+		boton.addActionListener(evento -> {
+			accion.run();
+			enfocarEntrada();
+		});
 	}
 
 	private JPanel encabezado(Runnable accionVolver) {
-		JPanel encabezado = vertical();
-		encabezado.add(barraSuperior(accionVolver));
-		encabezado.add(Box.createVerticalStrut(Tema.SEPARACION_RESUMEN));
-		encabezado.add(chips());
-		encabezado.add(Box.createVerticalStrut(Tema.SEPARACION_ENCABEZADO));
-		encabezado.add(progreso);
+		JPanel chips = new JPanel(new GridLayout(1, 2, Tema.ESPACIO, 0));
+		chips.setOpaque(false);
+		chips.add(celdas);
+		chips.add(siguiente);
+		JPanel encabezado = new JPanel(new BorderLayout(0, Tema.ESPACIO));
+		encabezado.setOpaque(false);
+		encabezado.add(barraSuperior(accionVolver), BorderLayout.NORTH);
+		encabezado.add(chips, BorderLayout.CENTER);
+		encabezado.add(progreso, BorderLayout.SOUTH);
 		return encabezado;
 	}
 
 	private JPanel barraSuperior(Runnable accionVolver) {
 		JPanel barra = new JPanel(new BorderLayout());
 		barra.setOpaque(false);
-		barra.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel titulo = etiqueta("ZIP", Tema.TAMANO_TITULO_JUEGO, Tema.TINTA);
-		titulo.setFont(Tema.fuenteConEspaciado(Tema.TAMANO_TITULO_JUEGO, true,
-				Tema.ESPACIADO_TITULO_JUEGO));
-		BotonFantasma volver = new BotonFantasma("Desconectar / Menú", true);
+		JButton volver = Tema.boton("Desconectar / Menú", false);
 		volver.setName("volver");
-		volver.setPreferredSize(new Dimension(Tema.ANCHO_VOLVER_FANTASMA + 60, Tema.ALTO_FANTASMA));
-		volver.agregarEscucha(evento -> accionVolver.run());
-		barra.add(titulo, BorderLayout.WEST);
+		volver.addActionListener(evento -> accionVolver.run());
+		barra.add(Tema.etiqueta("ZIP", Font.BOLD, Tema.TAMANO_TITULO, Tema.TINTA), BorderLayout.WEST);
 		barra.add(volver, BorderLayout.EAST);
 		return barra;
 	}
 
-	private JPanel chips() {
-		JPanel chips = new JPanel(new GridLayout(1, 2, Tema.SEPARACION_INDICADORES, 0));
-		chips.setOpaque(false);
-		chips.setAlignmentX(Component.LEFT_ALIGNMENT);
-		chips.add(celdas);
-		chips.add(siguiente);
-		chips.setMaximumSize(new Dimension(Integer.MAX_VALUE, Tema.ALTO_INDICADOR));
-		return chips;
-	}
-
-	private JPanel pie(Runnable accionReiniciar) {
-		JPanel pie = vertical();
-		reiniciar.agregarEscucha(evento -> accionReiniciar.run());
-		pie.add(centrado(teclasAyuda));
-		pie.add(Box.createVerticalStrut(Tema.SEPARACION_AYUDA));
-		pie.add(centrado(etiqueta("Conectá los números en orden y recorré todas las celdas.",
-				Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE)));
-		pie.add(Box.createVerticalStrut(Tema.DESPLAZAMIENTO_FOCO));
-		pie.add(centrado(estadoMensaje));
-		pie.add(Box.createVerticalStrut(Tema.SEPARACION_RESUMEN));
-		pie.add(centrado(acciones()));
+	private JPanel pie() {
+		JPanel textos = new JPanel(new GridLayout(0, 1, 0, SEPARACION_PIE));
+		textos.setOpaque(false);
+		textos.add(leyenda);
+		textos.add(crearEtiquetaCentrada("Conectá los números en orden y recorré todas las celdas.", null));
+		textos.add(estadoMensaje);
+		JPanel pie = new JPanel(new BorderLayout(0, Tema.ESPACIO));
+		pie.setOpaque(false);
+		pie.add(textos, BorderLayout.NORTH);
+		pie.add(acciones(), BorderLayout.SOUTH);
 		return pie;
 	}
 
 	private JPanel acciones() {
-		JPanel acciones = horizontal();
-		Dimension boton = new Dimension(Tema.ANCHO_BOTON_SECUNDARIO, Tema.ALTO_SECUNDARIO);
-		deshacer.setPreferredSize(boton);
-		reiniciar.setPreferredSize(boton);
+		JPanel acciones = new JPanel(new FlowLayout(FlowLayout.CENTER, Tema.ESPACIO, 0));
+		acciones.setOpaque(false);
 		acciones.add(deshacer);
-		acciones.add(Box.createHorizontalStrut(Tema.SEPARACION_ACCIONES));
 		acciones.add(reiniciar);
 		return acciones;
 	}
 
 	void controles(Controles controles) {
-		panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
-		panel.getActionMap().clear();
-		for (Direccion direccion : Direccion.values()) {
-			vincular("mover-" + direccion, controles.tecla(direccion), () -> mover(direccion));
+		adaptadorMouse.habilitar(controles.usaMouse());
+		if (controles == controlesActuales) {
+			return;
 		}
-		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::hacerClic);
-		reconstruirAyuda(controles);
-	}
-
-	private void reconstruirAyuda(Controles controles) {
-		teclasAyuda.removeAll();
-		teclasAyuda.add(teclasDireccion(controles));
-		teclasAyuda.add(Box.createHorizontalStrut(Tema.SEPARACION_TARJETAS));
-		teclasAyuda.add(new TeclaVisual("Backspace",
-				Tema.ANCHO_TECLA_BACKSPACE, Tema.TAMANO_TECLA_JUEGO));
-		teclasAyuda.add(Box.createHorizontalStrut(Tema.SEPARACION_TECLAS));
-		teclasAyuda.add(etiqueta("= deshacer", Tema.TAMANO_TEXTO_AYUDA, Tema.TINTA_SUAVE));
-		teclasAyuda.revalidate();
-		teclasAyuda.repaint();
-	}
-
-	private JPanel teclasDireccion(Controles controles) {
-		JPanel teclas = horizontal();
-		JComponent[] valores = teclasJuego(controles);
-		for (int indice = 0; indice < valores.length; indice++) {
-			if (indice > 0) {
-				teclas.add(Box.createHorizontalStrut(Tema.SEPARACION_TECLAS));
-			}
-			teclas.add(valores[indice]);
+		this.controlesActuales = controles;
+		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
+		getActionMap().clear();
+		if (!controles.usaMouse()) {
+			vincularDirecciones(controles);
 		}
-		return teclas;
+		vincular("deshacer", KeyEvent.VK_BACK_SPACE, deshacer::doClick);
+		leyenda.setText((controles.usaMouse() ? AYUDA_MOUSE : controles.leyendaTeclas())
+				+ " · Backspace = deshacer");
 	}
 
-	private JComponent[] teclasJuego(Controles controles) {
-		if (controles == Controles.FLECHAS) {
-			return new JComponent[] {teclaJuego(TipoIcono.FLECHA_ARRIBA), teclaJuego(TipoIcono.FLECHA_IZQUIERDA),
-				teclaJuego(TipoIcono.FLECHA_ABAJO), teclaJuego(TipoIcono.FLECHA_DERECHA)};
-		}
-		return new JComponent[] {teclaJuego("W"), teclaJuego("A"), teclaJuego("S"), teclaJuego("D")};
-	}
-
-	private JComponent teclaJuego(TipoIcono icono) {
-		return new TeclaVisual(icono, Tema.TAMANO_TECLA_JUEGO);
-	}
-
-	private JComponent teclaJuego(String texto) {
-		return new TeclaVisual(texto, Tema.TAMANO_TECLA_JUEGO, Tema.TAMANO_TECLA_JUEGO);
-	}
-
-	private void mover(Direccion direccion) {
-		if (jugando) {
-			mover.accept(direccion);
+	private void vincularDirecciones(Controles controles) {
+		for (Direccion dir : Direccion.values()) {
+			vincular("mover-" + dir, controles.tecla(dir), () -> {
+				if (jugando) {
+					mover.accept(dir);
+				}
+			});
 		}
 	}
 
 	private void vincular(String nombre, int tecla, Runnable accion) {
-		panel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
-				.put(KeyStroke.getKeyStroke(tecla, 0), nombre);
-		panel.getActionMap().put(nombre, new AbstractAction() {
+		getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(tecla, 0), nombre);
+		getActionMap().put(nombre, new AbstractAction() {
+			private static final long serialVersionUID = 1L;
+
 			@Override
 			public void actionPerformed(ActionEvent evento) {
-				accion.run();
+				if (entradaHabilitada()) {
+					accion.run();
+				}
 			}
 		});
 	}
 
+	private void irA(DestinoCelda destino) {
+		if (jugando && entradaHabilitada()) {
+			irA.accept(destino);
+		}
+	}
+
+	private boolean entradaHabilitada() {
+		JRootPane raiz = SwingUtilities.getRootPane(this);
+		return raiz == null || raiz.getGlassPane() == null || !raiz.getGlassPane().isVisible();
+	}
+
 	void mostrar(ActualizacionVista act) {
 		EstadoJuego estadoJuego = act.estadoJuego();
-		if (estadoJuego == null) {
-			mensaje(act.mensaje());
-			return;
-		}
 		jugando = !act.partidaFinalizada() && !estadoJuego.gano();
 		tablero.mostrar(estadoJuego, act.manchadoPorTomate());
-		celdas.establecerValor(estadoJuego.visitadas() + "/" + estadoJuego.nivel().cantidadCeldas());
-		String textoSiguiente = estadoJuego.gano()
-				? "Completado" : Integer.toString(estadoJuego.proximoNumero());
-		if (act.rondasObjetivo() > 1) {
-			textoSiguiente += " · " + act.rondasLocal() + "-" + act.rondasRival() + " (" + act.rondasObjetivo() + ")";
-		}
-		siguiente.establecerValor(textoSiguiente);
-		progreso.establecerValor((double) estadoJuego.visitadas()
-				/ estadoJuego.nivel().cantidadCeldas());
+		celdas.setText("Celdas: " + estadoJuego.visitadas() + "/" + estadoJuego.nivel().cantidadCeldas());
+		siguiente.setText("Próximo: " + textoSiguiente(act, estadoJuego));
+		progreso.setValue((int) Math.round(PROGRESO_MAXIMO
+				* (double) estadoJuego.visitadas() / estadoJuego.nivel().cantidadCeldas()));
 		deshacer.setEnabled(jugando && estadoJuego.visitadas() > 1);
-		mensaje(act.mensaje());
+		estadoMensaje.setText(act.mensaje());
 	}
 
-	void mostrar(EstadoJuego estadoJuego, String mensaje, boolean manchadoPorTomate) {
-		mostrar(new ActualizacionVista(estadoJuego, mensaje, manchadoPorTomate));
+	private String textoSiguiente(ActualizacionVista act, EstadoJuego estadoJuego) {
+		String texto = estadoJuego.gano() ? "Completado" : Integer.toString(estadoJuego.proximoNumero());
+		if (act.rondasObjetivo() > 1) {
+			texto += " · " + act.rondasLocal() + "-" + act.rondasRival() + " (" + act.rondasObjetivo() + ")";
+		}
+		return texto;
 	}
 
-	void mostrar(EstadoJuego estadoJuego, String mensaje) {
-		mostrar(estadoJuego, mensaje, false);
+	void enfocarEntrada() { tablero.requestFocusInWindow(); }
+
+	private static JLabel crearChip(String nombre) {
+		JLabel chip = Tema.etiqueta(" ", Font.BOLD, Tema.TAMANO_TEXTO, Tema.TINTA);
+		chip.setHorizontalAlignment(SwingConstants.CENTER);
+		chip.setName(nombre);
+		chip.setOpaque(true);
+		chip.setBackground(Tema.TARJETA);
+		chip.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Tema.BORDE),
+				BorderFactory.createEmptyBorder(RELLENO_CHIP_V, RELLENO_CHIP_H,
+						RELLENO_CHIP_V, RELLENO_CHIP_H)));
+		return chip;
 	}
 
-	void mensaje(String mensaje) {
-		estadoMensaje.setText(mensaje);
-	}
-
-	JPanel componente() {
-		return panel;
-	}
-
-	void enfocarEntrada() {
-		tablero.requestFocusInWindow();
-	}
-
-	private static JPanel vertical() {
-		JPanel panel = new JPanel();
-		panel.setOpaque(false);
-		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-		panel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		return panel;
-	}
-
-	private static JPanel horizontal() {
-		JPanel panel = new JPanel();
-		panel.setOpaque(false);
-		panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
-		return panel;
-	}
-
-	private static JPanel centrado(Component componente) {
-		JPanel envoltorio = horizontal();
-		envoltorio.add(Box.createHorizontalGlue());
-		envoltorio.add(componente);
-		envoltorio.add(Box.createHorizontalGlue());
-		return envoltorio;
-	}
-
-	private static JLabel etiqueta(String texto, int tamano, java.awt.Color color) {
-		JLabel etiqueta = new JLabel(texto, SwingConstants.LEFT);
-		etiqueta.setFont(Tema.fuente(tamano, false));
-		etiqueta.setForeground(color);
+	private static JLabel crearEtiquetaCentrada(String texto, String nombre) {
+		JLabel etiqueta = Tema.etiqueta(texto, Font.PLAIN, Tema.TAMANO_TEXTO, Tema.TINTA_SUAVE);
+		etiqueta.setHorizontalAlignment(SwingConstants.CENTER);
+		etiqueta.setName(nombre);
 		return etiqueta;
 	}
 }
