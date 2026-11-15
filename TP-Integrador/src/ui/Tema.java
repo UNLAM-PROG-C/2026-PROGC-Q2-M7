@@ -9,6 +9,7 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.UIManager;
+import javax.swing.border.Border;
 
 final class Tema {
 	static final Color FONDO = new Color(0xEEF1FB);
@@ -83,6 +84,10 @@ final class Tema {
 		return etiqueta;
 	}
 
+	static JLabel texto(String texto, int estilo, Color color) {
+		return etiqueta(texto, estilo, TAMANO_TEXTO, color);
+	}
+
 	static JButton boton(String texto, boolean principal) {
 		JButton boton = new JButton(texto);
 		boton.setFont(fuente(principal ? Font.BOLD : Font.PLAIN, TAMANO_TEXTO));
@@ -98,10 +103,19 @@ final class Tema {
 		return boton;
 	}
 
+	static Border relleno(int vertical, int horizontal) {
+		return BorderFactory.createEmptyBorder(vertical, horizontal, vertical, horizontal);
+	}
+
+	static Border marco(Color color, int grosor, int vertical, int horizontal) {
+		return BorderFactory.createCompoundBorder(
+				BorderFactory.createLineBorder(color, grosor), relleno(vertical, horizontal));
+	}
+
 	static JPanel panelBorde(LayoutManager layout, int vertical, int horizontal) {
 		JPanel panel = new JPanel(layout);
 		panel.setOpaque(false);
-		panel.setBorder(BorderFactory.createEmptyBorder(vertical, horizontal, vertical, horizontal));
+		panel.setBorder(relleno(vertical, horizontal));
 		return panel;
 	}
 }
