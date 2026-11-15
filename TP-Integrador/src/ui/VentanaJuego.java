@@ -16,7 +16,6 @@ import events.EventBus;
 import events.Evento;
 import events.TipoEvento;
 import model.Dificultad;
-import network.GestorRed;
 import utils.Constantes;
 
 public final class VentanaJuego implements AutoCloseable {
@@ -122,10 +121,12 @@ public final class VentanaJuego implements AutoCloseable {
 	}
 
 	private int leerPuerto(String texto) {
-		try {
-			int puerto = Integer.parseInt(texto);
-			if (puerto >= 1 && puerto <= PUERTO_MAXIMO) { return puerto; }
-		} catch (NumberFormatException ignored) {}
+		if (!texto.isEmpty() && texto.chars().allMatch(Character::isDigit)) {
+			long valor = Long.parseLong(texto);
+			if (valor >= 1 && valor <= PUERTO_MAXIMO) {
+				return (int) valor;
+			}
+		}
 		configuracion.error("Puerto inválido: " + texto);
 		return -1;
 	}
@@ -138,7 +139,7 @@ public final class VentanaJuego implements AutoCloseable {
 		String prefijo = esHost ? "Espera cancelada o error: " : "Error al conectar con host: ";
 		Thread hilo = new Thread(() -> arrancarMotor(rol, host, puerto, rondas, jugadores, intento, prefijo),
 				esHost ? "Thread-Conexion-Host" : "Thread-Conexion-Cliente");
-		if (esHost) { GestorRed.registrarEspera(hilo); }
+		hilo.setDaemon(true);
 		hilo.start();
 	}
 
@@ -156,39 +157,51 @@ public final class VentanaJuego implements AutoCloseable {
 
 	private void arrancarMotor(int rol, String host, int puerto, int rondas, int jugadores,
 			long intento, String prefijoError) {
-		try {
-			if (intento != intentoConexion.get()) { return; }
-			EventBus bus = new EventBus();
-			MotorJuego motor = new MotorJuego(rol, host, puerto, rondas, jugadores, bus,
-					act -> recibir(intento, act));
-			registrarMotor(rol, bus, motor, intento);
-		} catch (IOException e) {
-			SwingUtilities.invokeLater(() -> {
-				if (intento == intentoConexion.get()) { configuracion.error(prefijoError + e.getMessage()); }
-			});
-		} finally {
-			GestorRed.limpiarEspera(Thread.currentThread());
-		}
-	}
-
-	private void registrarMotor(int rol, EventBus bus, MotorJuego motor, long intento) {
-		if (!activarMotor(rol, bus, motor, intento)) {
+		EventBus bus = new EventBus();
+		MotorJuego motor = new MotorJuego(rol, host, puerto, rondas, jugadores, bus,
+				act -> recibir(intento, act));
+		if (!vincularMotor(bus, motor, intento)) {
 			motor.finalizar();
-		} else if (rol == Constantes.ROL_CLIENTE) {
-			SwingUtilities.invokeLater(() -> configuracion.estado("Conectado. Esperando inicio del host..."));
+			return;
 		}
+		conectarEIniciar(rol, bus, motor, intento, prefijoError);
 	}
 
-	private boolean activarMotor(int rol, EventBus bus, MotorJuego motor, long intento) {
+	private boolean vincularMotor(EventBus bus, MotorJuego motor, long intento) {
 		synchronized (lockConexion) {
-			if (intento != intentoConexion.get()) { return false; }
+			if (intento != intentoConexion.get()) {
+				return false;
+			}
 			this.busActual = bus;
 			this.motorActual = motor;
+			return true;
+		}
+	}
+
+	private void conectarEIniciar(int rol, EventBus bus, MotorJuego motor, long intento, String prefijoError) {
+		try {
+			motor.conectar();
+			activarMotorConectado(rol, bus, motor, intento);
+		} catch (IOException e) {
+			SwingUtilities.invokeLater(() -> {
+				if (intento == intentoConexion.get()) {
+					configuracion.error(prefijoError + e.getMessage());
+				}
+			});
+		}
+	}
+
+	private void activarMotorConectado(int rol, EventBus bus, MotorJuego motor, long intento) {
+		synchronized (lockConexion) {
+			if (intento != intentoConexion.get()) {
+				return;
+			}
 			motor.iniciar();
 			if (rol != Constantes.ROL_CLIENTE) {
 				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
+			} else {
+				SwingUtilities.invokeLater(() -> configuracion.estado("Conectado. Esperando inicio del host..."));
 			}
-			return true;
 		}
 	}
 
@@ -236,7 +249,6 @@ public final class VentanaJuego implements AutoCloseable {
 
 	private void abandonar() {
 		intentoConexion.incrementAndGet();
-		GestorRed.cancelarEsperaServidor();
 		MotorJuego motorCerrar;
 		synchronized (lockConexion) {
 			motorCerrar = motorActual;
@@ -253,9 +265,8 @@ public final class VentanaJuego implements AutoCloseable {
 			return estabaVisible;
 		}
 		String titulo = act.ganoLocal() ? "¡VICTORIA!" : "¡DERROTA!";
-		String quien = act.ganoLocal() ? "Ganaste" : "El rival ganó";
-		victoria.mostrarFinPartida(titulo,
-				quien + " la partida final (" + act.rondasLocal() + " a " + act.rondasRival() + ")");
+		String marcador = "(" + act.rondasLocal() + " a " + act.rondasRival() + ")";
+		victoria.mostrarFinPartida(titulo, act.mensaje() + " " + marcador);
 		return false;
 	}
 

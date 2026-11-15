@@ -28,6 +28,7 @@ public final class Main {
 
 		EventBus bus = new EventBus();
 		MotorJuego motor = new MotorJuego(rol, bus);
+		motor.conectar();
 		motor.iniciar();
 
 		ejecutarBucleConsola(bus, scanner);

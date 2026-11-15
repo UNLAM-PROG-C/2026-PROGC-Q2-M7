@@ -1,8 +1,11 @@
 package controller;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -28,39 +31,41 @@ public class MotorJuego {
 	private final int rol;
 	private final EventBus bus;
 	private final GestorRed red;
-	private Thread hiloConsumidor;
 	private final ScheduledExecutorService timer =
 			Executors.newScheduledThreadPool(Constantes.HILOS_TIMER);
+	private final Consumer<ActualizacionVista> vista;
+	private final Set<Integer> revanchasClientes = new HashSet<>();
+	private Thread hiloConsumidor;
+	private ScheduledFuture<?> tareaTomate;
 	private TableroZip tablero;
 	private GeneradorNivel generador;
 	private Dificultad dificultadActual;
-	private final Consumer<ActualizacionVista> vista;
 	private boolean manchadoPorTomate;
+	private boolean revanchaLocal;
 	private int rondasObjetivo;
 	private int rondasGanadasLocal;
 	private int rondasGanadasRival;
 	private boolean partidaFinalizada;
 
-	public MotorJuego(int rol, EventBus bus) throws IOException {
+	public MotorJuego(int rol, EventBus bus) {
 		this(rol, bus, null);
 	}
 
-	public MotorJuego(int rol, EventBus bus, Consumer<ActualizacionVista> vista) throws IOException {
+	public MotorJuego(int rol, EventBus bus, Consumer<ActualizacionVista> vista) {
 		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, Constantes.RONDAS_POR_DEFECTO, bus, vista);
 	}
 
-	public MotorJuego(int rol, String host, int puerto, EventBus bus,
-			Consumer<ActualizacionVista> vista) throws IOException {
+	public MotorJuego(int rol, String host, int puerto, EventBus bus, Consumer<ActualizacionVista> vista) {
 		this(rol, host, puerto, Constantes.RONDAS_POR_DEFECTO, bus, vista);
 	}
 
 	public MotorJuego(int rol, String host, int puerto, int rondasObjetivo, EventBus bus,
-			Consumer<ActualizacionVista> vista) throws IOException {
+			Consumer<ActualizacionVista> vista) {
 		this(rol, host, puerto, rondasObjetivo, Constantes.JUGADORES_RED_POR_DEFECTO, bus, vista);
 	}
 
 	public MotorJuego(int rol, String host, int puerto, int rondasObjetivo, int jugadores,
-			EventBus bus, Consumer<ActualizacionVista> vista) throws IOException {
+			EventBus bus, Consumer<ActualizacionVista> vista) {
 		this.rol = rol;
 		this.bus = bus;
 		this.vista = vista;
@@ -75,9 +80,15 @@ public class MotorJuego {
 		return Math.max(Constantes.MIN_RONDAS, Math.min(Constantes.MAX_RONDAS, rondas));
 	}
 
-	public void iniciar() {
+	public void conectar() throws IOException {
 		if (red != null) {
-			red.iniciarEscucha();
+			red.conectar();
+		}
+	}
+
+	public void iniciar() {
+		if (hiloConsumidor != null) {
+			return;
 		}
 		hiloConsumidor = new Thread(this::cicloConsumidor, "Thread-MotorJuego");
 		hiloConsumidor.setDaemon(true);
@@ -105,33 +116,84 @@ public class MotorJuego {
 			case IR_A_CELDA -> procesarIrACelda(event.payload());
 			case DESHACER -> procesarDeshacer();
 			case REINICIAR -> procesarReiniciar();
-			case RIVAL_COMPLETO_GRILLA -> procesarRivalCompletoGrilla(event.payload());
-			case LIMPIAR_TOMATE -> procesarLimpiarTomate();
-			case PARTIDA_FINALIZADA -> procesarPartidaFinalizada();
-			case CONEXION_PERDIDA -> procesarConexionPerdida();
 			case GRILLA_COMPLETA -> procesarGrillaCompleta();
-			default -> System.err.println("Evento no conocido: " + event.tipo());
+			case LIMPIAR_TOMATE -> procesarLimpiarTomate();
+			default -> despacharEventoRed(event);
+		}
+	}
+
+	private void despacharEventoRed(Evento event) {
+		switch (event.tipo()) {
+			case PARTIDA_INICIADA -> procesarPartidaIniciada(event.payload());
+			case SOLICITAR_REVANCHA -> procesarSolicitarRevancha(event.payload());
+			case RIVAL_COMPLETO_GRILLA -> procesarRivalCompletoGrilla(event.payload());
+			case PARTIDA_FINALIZADA -> procesarPartidaFinalizada();
+			case JUGADOR_DESCONECTADO -> procesarJugadorDesconectado(event.payload());
+			case CONEXION_PERDIDA -> procesarConexionPerdida();
+			default -> System.err.println("[MOTOR] Evento no conocido: " + event.tipo());
 		}
 	}
 
 	private void procesarIniciar(Object payload) {
-		if (payload instanceof String datosInicio) {
-			iniciarDesdeRed(datosInicio);
-		} else if (rol == Constantes.ROL_CLIENTE && red != null) {
-			red.enviarEvento(TipoEvento.INICIAR);
-		} else {
-			iniciarComoAutoridad(payload);
-		}
-	}
-
-	private void iniciarComoAutoridad(Object payload) {
 		if (payload instanceof Dificultad d) {
 			this.dificultadActual = d;
 		}
-		long semilla = ThreadLocalRandom.current().nextLong();
-		if (rol == Constantes.ROL_HOST && red != null) {
-			red.enviarEvento(TipoEvento.INICIAR, armarDatosInicio(semilla));
+		if (rol == Constantes.ROL_LOCAL) {
+			iniciarPartidaConSemilla(ThreadLocalRandom.current().nextLong());
+		} else if (tablero == null) {
+			lanzarPartidaAutoridad();
+		} else {
+			solicitarRevanchaLocal();
 		}
+	}
+
+	private void solicitarRevanchaLocal() {
+		if (!hayRivalesConectados()) {
+			procesarConexionPerdida();
+			return;
+		}
+		revanchaLocal = true;
+		if (rol == Constantes.ROL_CLIENTE) {
+			red.enviarEvento(TipoEvento.SOLICITAR_REVANCHA);
+			notificarVista("Esperando que el rival acepte jugar de nuevo...");
+		} else if (revanchaLista()) {
+			lanzarPartidaAutoridad();
+		} else {
+			notificarVista("Esperando que el rival acepte jugar de nuevo...");
+		}
+	}
+
+	private void procesarSolicitarRevancha(Object payload) {
+		if (rol != Constantes.ROL_HOST || !partidaFinalizada || !(payload instanceof Integer idCliente)) {
+			return;
+		}
+		revanchasClientes.add(idCliente);
+		if (revanchaLista()) {
+			lanzarPartidaAutoridad();
+		} else {
+			notificarVista("El rival quiere la revancha. Tocá 'Jugar de nuevo' para aceptar.");
+		}
+	}
+
+	private boolean revanchaLista() {
+		return revanchaLocal && hayRivalesConectados()
+				&& revanchasClientes.size() >= red.clientesConectados();
+	}
+
+	private boolean hayRivalesConectados() {
+		return red != null && red.clientesConectados() > 0;
+	}
+
+	private void lanzarPartidaAutoridad() {
+		if (rol != Constantes.ROL_HOST) {
+			return;
+		}
+		if (!hayRivalesConectados()) {
+			procesarConexionPerdida();
+			return;
+		}
+		long semilla = ThreadLocalRandom.current().nextLong();
+		red.enviarEvento(TipoEvento.PARTIDA_INICIADA, armarDatosInicio(semilla));
 		iniciarPartidaConSemilla(semilla);
 	}
 
@@ -139,26 +201,28 @@ public class MotorJuego {
 		return dificultadActual.name() + SEPARADOR_DATOS + rondasObjetivo + SEPARADOR_DATOS + semilla;
 	}
 
-	private void iniciarDesdeRed(String datos) {
+	private void procesarPartidaIniciada(Object payload) {
+		if (!(payload instanceof String datos)) { return; }
 		String[] partes = datos.split(SEPARADOR_DATOS);
-		if (partes.length != PARTES_INICIO) {
-			return;
-		}
+		if (partes.length != PARTES_INICIO) { return; }
 		try {
 			this.dificultadActual = Dificultad.valueOf(partes[0]);
 			this.rondasObjetivo = acotarRondas(Integer.parseInt(partes[1]));
 			iniciarPartidaConSemilla(Long.parseLong(partes[2]));
-		} catch (IllegalArgumentException ignored) {
-			// Mensaje de inicio inválido
+		} catch (IllegalArgumentException e) {
+			System.err.println("[MOTOR] Datos de inicio inválidos: " + e.getMessage());
 		}
 	}
 
 	private void iniciarPartidaConSemilla(long semilla) {
+		cancelarTomate();
 		this.generador = new GeneradorNivel(semilla);
 		this.rondasGanadasLocal = 0;
 		this.rondasGanadasRival = 0;
 		this.partidaFinalizada = false;
 		this.manchadoPorTomate = false;
+		this.revanchaLocal = false;
+		this.revanchasClientes.clear();
 		this.tablero = new TableroZip(generador.generar(dificultadActual));
 		notificarVista("¡Partida iniciada! Conectá los números en orden.");
 	}
@@ -208,11 +272,7 @@ public class MotorJuego {
 	private void procesarGrillaCompleta() {
 		rondasGanadasLocal++;
 		if (rondasGanadasLocal >= rondasObjetivo) {
-			partidaFinalizada = true;
-			if (red != null) {
-				red.enviarEvento(TipoEvento.PARTIDA_FINALIZADA);
-			}
-			notificarVista("¡GANASTE LA PARTIDA! (" + rondasGanadasLocal + " - " + rondasGanadasRival + ")");
+			declararVictoriaLocal();
 			return;
 		}
 		if (red != null) {
@@ -221,7 +281,18 @@ public class MotorJuego {
 		avanzarSiguienteRonda();
 	}
 
+	private void declararVictoriaLocal() {
+		cancelarTomate();
+		partidaFinalizada = true;
+		manchadoPorTomate = false;
+		if (red != null) {
+			red.enviarEvento(TipoEvento.PARTIDA_FINALIZADA);
+		}
+		notificarVista("¡GANASTE LA PARTIDA! (" + rondasGanadasLocal + " - " + rondasGanadasRival + ")");
+	}
+
 	private void avanzarSiguienteRonda() {
+		cancelarTomate();
 		notificarVista("¡Ronda ganada! (" + rondasGanadasLocal + "/" + rondasObjetivo + "). Siguiente ronda...");
 		this.tablero = new TableroZip(generador.generar(dificultadActual));
 		this.manchadoPorTomate = false;
@@ -240,36 +311,71 @@ public class MotorJuego {
 		manchadoPorTomate = true;
 		notificarVista("¡Rival completó grilla! (" + rondasGanadasLocal + " - "
 				+ rondasGanadasRival + ") ¡Tomatazo recibido!");
-		timer.schedule(() -> bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE)),
-				Constantes.SEGUNDOS_TOMATE, TimeUnit.SECONDS);
+		programarLimpiezaTomate();
+	}
+
+	private void programarLimpiezaTomate() {
+		cancelarTomate();
+		tareaTomate = timer.schedule(
+				() -> bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE)),
+				Constantes.SEGUNDOS_TOMATE,
+				TimeUnit.SECONDS);
+	}
+
+	private void cancelarTomate() {
+		if (tareaTomate != null) {
+			tareaTomate.cancel(false);
+			tareaTomate = null;
+		}
 	}
 
 	private void actualizarRondasRival(Object payload) {
-		if (payload instanceof String texto) {
-			try {
-				rondasGanadasRival = Math.max(rondasGanadasRival, Integer.parseInt(texto.trim()));
-				return;
-			} catch (NumberFormatException ignored) {
-				// Usa incremento simple si no viene número
-			}
+		if (payload == null) {
+			rondasGanadasRival++;
+			return;
 		}
-		rondasGanadasRival++;
+		try {
+			int rondasRemotas = Integer.parseInt(payload.toString().trim());
+			rondasGanadasRival = Math.max(rondasGanadasRival, rondasRemotas);
+		} catch (NumberFormatException e) {
+			System.err.println("[MOTOR] Puntaje de rival inválido: " + e.getMessage());
+		}
 	}
 
 	private void procesarLimpiarTomate() {
-		manchadoPorTomate = false;
-		notificarVista("Se limpió el tomate. ¡Seguí jugando!");
+		if (!partidaFinalizada && manchadoPorTomate) {
+			manchadoPorTomate = false;
+			notificarVista("Se limpió el tomate. ¡Seguí jugando!");
+		}
 	}
 
 	private void procesarPartidaFinalizada() {
+		cancelarTomate();
 		partidaFinalizada = true;
+		manchadoPorTomate = false;
 		rondasGanadasRival = rondasObjetivo;
 		notificarVista("¡El rival completó " + rondasObjetivo + " rondas y ganó la partida!");
 	}
 
+	private void procesarJugadorDesconectado(Object payload) {
+		if (payload instanceof Integer idCliente) {
+			revanchasClientes.remove(idCliente);
+		}
+		if (partidaFinalizada && revanchaLista()) {
+			lanzarPartidaAutoridad();
+		} else if (!partidaFinalizada && tablero != null) {
+			notificarVista("Un rival se desconectó de la partida.");
+		}
+	}
+
 	private void procesarConexionPerdida() {
-		System.err.println("[RED] Conexión perdida.");
-		notificarVista("Conexión con el rival perdida. Podés volver al menú.");
+		cancelarTomate();
+		this.tablero = null;
+		this.partidaFinalizada = false;
+		this.manchadoPorTomate = false;
+		this.revanchaLocal = false;
+		this.revanchasClientes.clear();
+		notificarVista("Conexión cerrada: el rival abandonó la partida.");
 	}
 
 	private void notificarVista(String mensaje) {
@@ -289,16 +395,13 @@ public class MotorJuego {
 	}
 
 	public void finalizar() {
+		cancelarTomate();
 		if (hiloConsumidor != null) {
 			hiloConsumidor.interrupt();
 		}
 		timer.shutdownNow();
 		if (red != null) {
-			try {
-				red.cerrar();
-			} catch (IOException e) {
-				System.err.println("Error al cerrar: " + e.getMessage());
-			}
+			red.cerrar();
 		}
 	}
 }

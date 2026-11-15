@@ -23,16 +23,9 @@ import utils.Constantes;
 final class PanelConfiguracion extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private static final int RELLENO_CAMPO = 8;
-	private static final String TITULO_HTML = "<html><span style='font-size:26pt'><b>ZIP</b></span><br>"
-			+ "<span style='color:#4A5073'>Conectá los números. Completá el tablero.</span></html>";
-	private static final String[][] DIFICULTADES = {
-			{"Fácil", "Tablero chico,<br>recorrido directo."},
-			{"Media", "Tablero mediano,<br>hay que planificar."},
-			{"Difícil", "Tablero grande,<br>cada giro cuenta."}};
-	private static final String HTML_HOST = "<html><div style='text-align:center'><b>Crear partida (Host)</b>"
-			+ "<br><span style='color:#4A5073'>Configurá la sala y esperá rivales.</span></div></html>";
-	private static final String HTML_CLIENTE = "<html><div style='text-align:center'><b>Unirse (Cliente)</b>"
-			+ "<br><span style='color:#4A5073'>Conectate a la IP del host.</span></div></html>";
+	private static final String[] DIFICULTADES = { "Fácil", "Media", "Difícil"};
+	private static final String TEXT_HOST = "Crear partida (Host)";
+	private static final String TEXT_CLIENTE = "Unirse (Cliente)";
 
 	private final transient List<JToggleButton> tarjetas = new ArrayList<>();
 	private final JPanel cuerpo = Tema.panelBorde(null, 0, 0);
@@ -41,7 +34,6 @@ final class PanelConfiguracion extends JPanel {
 	private final JPanel panelJugadoresHost = panelVertical();
 	private final JPanel panelDatosCliente = panelVertical();
 	private final JButton botonModo = Tema.boton("Un jugador", false);
-	private final JLabel insigniaModo = crearInsignia();
 	private final JSlider sliderRondas = new JSlider(
 			Constantes.MIN_RONDAS, Constantes.MAX_RONDAS, Constantes.RONDAS_POR_DEFECTO);
 	private final JLabel etiquetaRondas = Tema.etiqueta("", Font.BOLD, Tema.TAMANO_CHICO, Tema.ACENTO);
@@ -122,7 +114,8 @@ final class PanelConfiguracion extends JPanel {
 	private void construirCuerpo() {
 		cuerpo.setLayout(new BoxLayout(cuerpo, BoxLayout.Y_AXIS));
 		cuerpo.add(crearBarraSuperior());
-		JLabel titulo = Tema.etiqueta(TITULO_HTML, Font.PLAIN, Tema.TAMANO_SUBTITULO, Tema.TINTA);
+		JLabel titulo = Tema.etiqueta("ZIP", Font.BOLD, Tema.TAMANO_TITULO, Tema.TINTA);
+		titulo.setBorder(BorderFactory.createEmptyBorder(0, 0, Tema.ESPACIO, 0));
 		titulo.setAlignmentX(JComponent.LEFT_ALIGNMENT);
 		cuerpo.add(titulo);
 		construirSeccionRolRed();
@@ -142,7 +135,6 @@ final class PanelConfiguracion extends JPanel {
 		botonModo.setName("alternar-modo");
 		botonModo.addActionListener(e -> alternarModoIndividual());
 		barra.add(botonModo, BorderLayout.WEST);
-		barra.add(insigniaModo, BorderLayout.EAST);
 		return barra;
 	}
 
@@ -159,8 +151,8 @@ final class PanelConfiguracion extends JPanel {
 	private void construirSeccionRolRed() {
 		ButtonGroup grupo = new ButtonGroup();
 		JPanel grilla = Tema.panelBorde(new GridLayout(1, 0, Tema.ESPACIO, 0), 0, 0);
-		JToggleButton host = crearBotonTarjeta("rol-host", HTML_HOST, true, () -> elegirRolRed(Constantes.ROL_HOST));
-		JToggleButton cli = crearBotonTarjeta("rol-cliente", HTML_CLIENTE, false,
+		JToggleButton host = crearBotonTarjeta("rol-host", TEXT_HOST, true, () -> elegirRolRed(Constantes.ROL_HOST));
+		JToggleButton cli = crearBotonTarjeta("rol-cliente", TEXT_CLIENTE, false,
 				() -> elegirRolRed(Constantes.ROL_CLIENTE));
 		grupo.add(host);
 		grupo.add(cli);
@@ -259,7 +251,6 @@ final class PanelConfiguracion extends JPanel {
 		boolean local = rolSeleccionado == Constantes.ROL_LOCAL;
 		boolean host = rolSeleccionado == Constantes.ROL_HOST;
 		botonModo.setText(local ? "← Multijugador" : "Un jugador");
-		insigniaModo.setText(local ? "MODO INDIVIDUAL" : "MULTIJUGADOR EN RED");
 		panelRolRed.setVisible(!local);
 		panelOpcionesPartida.setVisible(local || host);
 		panelJugadoresHost.setVisible(host);
@@ -275,7 +266,7 @@ final class PanelConfiguracion extends JPanel {
 		etiquetaRondas.setText(txtRondas);
 		etiquetaJugadores.setText(cantidadJugadores() + " jugadores");
 		Dificultad d = dificultadSeleccionada;
-		String base = DIFICULTADES[d.ordinal()][0] + " " + d.tamano() + "×" + d.tamano()
+		String base = DIFICULTADES[d.ordinal()] + " " + d.tamano() + "×" + d.tamano()
 				+ " · Al mejor de " + txtRondas;
 		aplicarTextoSegunRol(base);
 	}
@@ -311,17 +302,8 @@ final class PanelConfiguracion extends JPanel {
 		return panel;
 	}
 
-	private static JLabel crearInsignia() {
-		JLabel tag = Tema.etiqueta("MULTIJUGADOR EN RED", Font.BOLD, Tema.TAMANO_CHICO, Tema.ACENTO);
-		tag.setOpaque(true);
-		tag.setBackground(Tema.VISITADA);
-		tag.setBorder(BorderFactory.createEmptyBorder(Tema.ESPACIO / 2, Tema.ESPACIO, Tema.ESPACIO / 2, Tema.ESPACIO));
-		return tag;
-	}
-
 	private static String textoDificultad(Dificultad d) {
-		return "<html><div style='text-align:center'><b>" + DIFICULTADES[d.ordinal()][0] + "<br><big>"
-				+ d.tamano() + "×" + d.tamano() + "</big></b><br><span style='color:#4A5073'>"
-				+ DIFICULTADES[d.ordinal()][1] + "</span></div></html>";
+		return "<html><b>" + DIFICULTADES[d.ordinal()] + "<br><big>"
+				+ d.tamano() + "×" + d.tamano() + "</big></b><br>";
 	}
 }

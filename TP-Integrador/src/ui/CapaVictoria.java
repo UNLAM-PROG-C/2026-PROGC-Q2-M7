@@ -22,32 +22,52 @@ final class CapaVictoria extends JPanel {
 	private static final int ANCHO_TARJETA = 420;
 	private static final int ALTO_TARJETA = 280;
 	private static final float TRANSPARENCIA = 0.35f;
+	private static final String TEXTO_REVANCHA = "Jugar de nuevo";
+	private static final String TEXTO_ESPERANDO = "Esperando rival...";
 
 	private final JLabel titulo = etiqueta("¡Completado!", Font.BOLD, Tema.TAMANO_TITULO, "victoria");
-	private final JLabel detalle = etiqueta("", Font.PLAIN, Tema.TAMANO_SUBTITULO, null);
-	private final JButton jugarNuevamente = Tema.boton("Jugar de nuevo", true);
+	private final JLabel detalle = etiqueta("", Font.PLAIN, Tema.TAMANO_SUBTITULO, "victoria-detalle");
+	private final JButton jugarNuevamente = Tema.boton(TEXTO_REVANCHA, true);
 	private final JButton menu = Tema.boton("Volver al menú", false);
 
 	CapaVictoria(Runnable jugarOtraVez, Runnable volverAlMenu) {
 		super(new GridBagLayout());
-		setOpaque(false); setVisible(false);
-		setFocusCycleRoot(true); setName("superposicion-victoria");
+		setOpaque(false);
+		setVisible(false);
+		setFocusCycleRoot(true);
+		setName("superposicion-victoria");
 		MouseAdapter bloqueo = new MouseAdapter() {
 			@Override public void mousePressed(MouseEvent e) {
 				if (!menu.hasFocus()) { jugarNuevamente.requestFocusInWindow(); }
 			}
 		};
-		addMouseListener(bloqueo); addMouseMotionListener(bloqueo);
+		addMouseListener(bloqueo);
+		addMouseMotionListener(bloqueo);
 		add(tarjeta(jugarOtraVez, volverAlMenu));
 	}
 
 	void mostrarFinPartida(String tituloTexto, String detalleTexto) {
-		titulo.setText(tituloTexto); detalle.setText(detalleTexto);
+		boolean reciénAbierta = !isVisible();
+		if (reciénAbierta) {
+			reiniciarBotonRevancha();
+		}
+		titulo.setText(tituloTexto);
+		detalle.setText(detalleTexto);
 		setVisible(true);
-		SwingUtilities.invokeLater(jugarNuevamente::requestFocusInWindow);
+		if (reciénAbierta) {
+			SwingUtilities.invokeLater(jugarNuevamente::requestFocusInWindow);
+		}
 	}
 
-	void ocultarSuperposicion() { setVisible(false); }
+	void ocultarSuperposicion() {
+		reiniciarBotonRevancha();
+		setVisible(false);
+	}
+
+	private void reiniciarBotonRevancha() {
+		jugarNuevamente.setEnabled(true);
+		jugarNuevamente.setText(TEXTO_REVANCHA);
+	}
 
 	@Override
 	protected void paintComponent(Graphics graficos) {
@@ -56,16 +76,31 @@ final class CapaVictoria extends JPanel {
 			dibujo.setComposite(AlphaComposite.SrcOver.derive(TRANSPARENCIA));
 			dibujo.setColor(Tema.TINTA);
 			dibujo.fillRect(0, 0, getWidth(), getHeight());
-		} finally { dibujo.dispose(); }
+		} finally {
+			dibujo.dispose();
+		}
 	}
 
 	private JPanel tarjeta(Runnable jugarOtraVez, Runnable volverAlMenu) {
-		jugarNuevamente.setName("jugar-de-nuevo"); menu.setName("menu-victoria");
-		jugarNuevamente.addActionListener(e -> { setVisible(false); jugarOtraVez.run(); });
-		menu.addActionListener(e -> { setVisible(false); volverAlMenu.run(); });
+		jugarNuevamente.setName("jugar-de-nuevo");
+		menu.setName("menu-victoria");
+		jugarNuevamente.addActionListener(e -> {
+			jugarNuevamente.setEnabled(false);
+			jugarNuevamente.setText(TEXTO_ESPERANDO);
+			jugarOtraVez.run();
+		});
+		menu.addActionListener(e -> {
+			ocultarSuperposicion();
+			volverAlMenu.run();
+		});
+		return armarContenedorTarjeta();
+	}
+
+	private JPanel armarContenedorTarjeta() {
 		JPanel tarjeta = new JPanel(new BorderLayout(0, Tema.MARGEN));
 		tarjeta.setBackground(Tema.TARJETA);
-		tarjeta.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Tema.BORDE),
+		tarjeta.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createLineBorder(Tema.BORDE),
 				BorderFactory.createEmptyBorder(Tema.MARGEN, Tema.MARGEN, Tema.MARGEN, Tema.MARGEN)));
 		tarjeta.setPreferredSize(new Dimension(ANCHO_TARJETA, ALTO_TARJETA));
 		tarjeta.add(bloque(titulo, detalle), BorderLayout.NORTH);
@@ -76,13 +111,15 @@ final class CapaVictoria extends JPanel {
 	private static JPanel bloque(JComponent primero, JComponent segundo) {
 		JPanel panel = new JPanel(new GridLayout(0, 1, 0, Tema.ESPACIO));
 		panel.setOpaque(false);
-		panel.add(primero); panel.add(segundo);
+		panel.add(primero);
+		panel.add(segundo);
 		return panel;
 	}
 
 	private static JLabel etiqueta(String texto, int estilo, int tamano, String nombre) {
 		JLabel etiqueta = Tema.etiqueta(texto, estilo, tamano, Tema.TINTA);
-		etiqueta.setAlignmentX(CENTER_ALIGNMENT); etiqueta.setHorizontalAlignment(JLabel.CENTER);
+		etiqueta.setAlignmentX(CENTER_ALIGNMENT);
+		etiqueta.setHorizontalAlignment(JLabel.CENTER);
 		etiqueta.setName(nombre);
 		return etiqueta;
 	}
