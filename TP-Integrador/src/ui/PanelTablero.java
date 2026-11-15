@@ -3,265 +3,267 @@ package ui;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
-import java.awt.geom.Ellipse2D;
-import java.util.HashSet;
+import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.geom.RoundRectangle2D;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import javax.swing.JPanel;
 import model.Celda;
 import model.EstadoJuego;
 
 final class PanelTablero extends JPanel {
 	private static final long serialVersionUID = 1L;
-	private transient Optional<EstadoJuego> estado = Optional.empty();
+	private static final int RELLENO_TABLERO = 12;
+	private static final int TAMANO_PREFERIDO = 440;
+	private static final int SEPARACION_CELDAS = 8;
+	private static final int RADIO_TABLERO = 20;
+	private static final int RADIO_CELDA = 12;
+	private static final int DIAMETRO_NUMERO = 40;
+	private static final int BORDE_NUMERO = 3;
+	private static final int MARGEN_NUMERO = 4;
+	private static final int TAMANO_NUMERO = 16;
+	private static final int TAMANO_TOMATE = 32;
+	private static final int PUNTO_ACTUAL = 14;
+	private static final float GROSOR_RECORRIDO = 5.0f;
+	private static final float ESCALA_RADIO_TOMATE = 0.44f;
+	private static final float ESCALA_BULTOS_TOMATE = 0.48f;
+	private static final float ESCALA_GOTA_TOMATE = 0.25f;
+	private static final float ESCALA_ANCHO_TALLO = 0.35f;
+	private static final float ESCALA_ALTO_TALLO = 0.20f;
+	private static final float ESCALA_BRILLO_TOMATE = 0.28f;
+	private static final int DIVISOR_TERCIO = 3;
+	private static final int VERTICES_TALLO = 3;
+	private static final String TEXTO_TOMATE = "¡TOMATAZO!";
+	private static final Color TOMATE_CUERPO = new Color(220, 25, 25, 252);
+	private static final Color TOMATE_SOMBRA = new Color(175, 15, 15, 255);
+	private static final Color TOMATE_BRILLO = new Color(248, 113, 113, 210);
+	private static final Color TOMATE_HOJA = new Color(34, 197, 94);
+	private static final Color TOMATE_TEXTO = Color.WHITE;
+	private static final Color TOMATE_SOMBRA_TEXTO = new Color(0, 0, 0, 220);
+	private static final BasicStroke TRAZO_RECORRIDO = trazo(GROSOR_RECORRIDO);
+	private static final Font FUENTE_NUMERO = Tema.fuente(Font.BOLD, TAMANO_NUMERO);
+	private static final Font FUENTE_TOMATE = Tema.fuente(Font.BOLD, TAMANO_TOMATE);
+
+	private transient EstadoJuego estado;
+	private boolean[][] visitadas = new boolean[0][0];
 	private boolean manchadoPorTomate;
 
 	PanelTablero() {
 		setName("tablero");
 		setBackground(Tema.FONDO);
-		setPreferredSize(new Dimension(Tema.TAMANO_PREFERIDO_TABLERO,
-				Tema.TAMANO_PREFERIDO_TABLERO));
+		setPreferredSize(new Dimension(TAMANO_PREFERIDO, TAMANO_PREFERIDO));
 	}
 
-	void mostrar(EstadoJuego estado, boolean manchadoPorTomate) {
-		this.estado = Optional.of(estado);
-		this.manchadoPorTomate = manchadoPorTomate;
+	void mostrar(EstadoJuego nuevoEstado, boolean manchado) {
+		this.estado = nuevoEstado;
+		this.manchadoPorTomate = manchado;
+		actualizarVisitadas(nuevoEstado);
 		repaint();
 	}
 
-	void mostrar(EstadoJuego estado) {
-		mostrar(estado, false);
-	}
-
 	Optional<EstadoJuego> estadoActual() {
-		return estado;
+		return Optional.ofNullable(estado);
 	}
 
 	/** Celda bajo el punto, o vacío si cae fuera de la grilla o entre celdas. */
 	Optional<Celda> celdaEn(Point punto) {
-		if (estado.isEmpty()) {
+		if (estado == null) {
 			return Optional.empty();
 		}
 		return geometria().celdaEn(punto);
 	}
 
+	private void actualizarVisitadas(EstadoJuego nuevoEstado) {
+		int tamano = nuevoEstado.nivel().tamano();
+		if (visitadas.length != tamano) {
+			visitadas = new boolean[tamano][tamano];
+		} else {
+			for (boolean[] fila : visitadas) {
+				Arrays.fill(fila, false);
+			}
+		}
+		for (Celda celda : nuevoEstado.recorrido()) {
+			visitadas[celda.fila()][celda.columna()] = true;
+		}
+	}
+
 	@Override
 	protected void paintComponent(Graphics graficos) {
 		super.paintComponent(graficos);
-		if (estado.isEmpty()) {
-			return;
-		}
+		if (estado == null) { return; }
 		Graphics2D dibujo = (Graphics2D) graficos.create();
 		try {
-			Tema.preparar(dibujo);
-			Geometria grilla = geometria();
-			dibujarTablero(dibujo, grilla);
-			if (manchadoPorTomate) {
-				dibujarTomate(dibujo, grilla);
-			}
+			preparar(dibujo);
+			dibujarTablero(dibujo, geometria());
 		} finally {
 			dibujo.dispose();
 		}
 	}
 
-	private EstadoJuego estadoJuego() {
-		return estado.orElseThrow();
-	}
-
 	private Geometria geometria() {
-		int ladoTablero = Math.min(getWidth(), getHeight());
-		int izquierdaTablero = (getWidth() - ladoTablero) / 2;
-		int superiorTablero = (getHeight() - ladoTablero) / 2;
-		int tamanoNivel = estadoJuego().nivel().tamano();
-		int espacioGrilla = ladoTablero - 2 * Tema.RELLENO_TABLERO;
-		int celda = (espacioGrilla - (tamanoNivel - 1) * Tema.SEPARACION_CELDAS) / tamanoNivel;
-		int ladoGrilla = celda * tamanoNivel + (tamanoNivel - 1) * Tema.SEPARACION_CELDAS;
-		int izquierdaGrilla = izquierdaTablero + (ladoTablero - ladoGrilla) / 2;
-		int superiorGrilla = superiorTablero + (ladoTablero - ladoGrilla) / 2;
-		return new Geometria(izquierdaTablero, superiorTablero, ladoTablero,
-				izquierdaGrilla, superiorGrilla, celda, tamanoNivel);
+		int ladoTablero = Math.max(1, Math.min(getWidth(), getHeight()));
+		int izqTablero = (getWidth() - ladoTablero) / 2;
+		int supTablero = (getHeight() - ladoTablero) / 2;
+		int tamanoNivel = estado.nivel().tamano();
+		int espacioGrilla = ladoTablero - 2 * RELLENO_TABLERO;
+		int separacion = (tamanoNivel - 1) * SEPARACION_CELDAS;
+		int celda = Math.max(1, (espacioGrilla - separacion) / tamanoNivel);
+		int ladoGrilla = celda * tamanoNivel + separacion;
+		return new Geometria(izqTablero, supTablero, ladoTablero,
+				izqTablero + (ladoTablero - ladoGrilla) / 2,
+				supTablero + (ladoTablero - ladoGrilla) / 2, celda, tamanoNivel);
 	}
 
 	private void dibujarTablero(Graphics2D dibujo, Geometria grilla) {
 		dibujo.setColor(Tema.FONDO_TABLERO);
-		dibujo.fill(Tema.redondeado(grilla.izquierdaTablero(), grilla.superiorTablero(),
-				grilla.ladoTablero(), grilla.ladoTablero(), Tema.RADIO_TABLERO));
-		Set<Celda> visitadas = new HashSet<>(estadoJuego().recorrido());
-		dibujarCeldas(dibujo, grilla, visitadas);
+		dibujo.fill(redondeado(grilla.izqTablero(), grilla.supTablero(),
+				grilla.ladoTablero(), grilla.ladoTablero(), RADIO_TABLERO));
+		dibujarCeldas(dibujo, grilla);
 		dibujarRecorrido(dibujo, grilla);
-		dibujarActual(dibujo, grilla);
+		Celda actual = estado.actual();
+		dibujo.setColor(Tema.TARJETA);
+		dibujo.fillOval(grilla.centroX(actual.columna()) - PUNTO_ACTUAL / 2,
+				grilla.centroY(actual.fila()) - PUNTO_ACTUAL / 2, PUNTO_ACTUAL, PUNTO_ACTUAL);
 		dibujarNumeros(dibujo, grilla);
+		if (manchadoPorTomate) { dibujarTomate(dibujo, grilla); }
 	}
 
-	private void dibujarCeldas(Graphics2D dibujo, Geometria grilla, Set<Celda> visitadas) {
+	private void dibujarCeldas(Graphics2D dibujo, Geometria grilla) {
+		Celda actual = estado.actual();
 		for (int fila = 0; fila < grilla.tamanoNivel(); fila++) {
-			for (int columna = 0; columna < grilla.tamanoNivel(); columna++) {
-				Celda celda = new Celda(fila, columna);
-				dibujarCelda(dibujo, grilla, celda, visitadas.contains(celda));
+			for (int col = 0; col < grilla.tamanoNivel(); col++) {
+				boolean esActual = fila == actual.fila() && col == actual.columna();
+				dibujo.setColor(esActual ? Tema.ACENTO : (visitadas[fila][col] ? Tema.VISITADA : Tema.TARJETA));
+				dibujo.fill(redondeado(grilla.x(col), grilla.y(fila), grilla.celda(), grilla.celda(), RADIO_CELDA));
 			}
 		}
-	}
-
-	private void dibujarCelda(Graphics2D dibujo, Geometria grilla, Celda celda, boolean visitadas) {
-		Color color = visitadas ? Tema.VISITADA : Tema.TARJETA;
-		if (celda.equals(estadoJuego().actual())) {
-			color = Tema.ACENTO;
-		}
-		dibujo.setColor(color);
-		dibujo.fill(Tema.redondeado(grilla.x(celda), grilla.y(celda), grilla.celda(),
-				grilla.celda(), Tema.RADIO_CELDA));
 	}
 
 	private void dibujarRecorrido(Graphics2D dibujo, Geometria grilla) {
-		List<Celda> recorrido = estadoJuego().recorrido();
+		List<Celda> recorrido = estado.recorrido();
 		dibujo.setColor(Tema.ACENTO);
-		dibujo.setStroke(new BasicStroke(Tema.GROSOR_RECORRIDO,
-				BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+		dibujo.setStroke(TRAZO_RECORRIDO);
 		for (int indice = 1; indice < recorrido.size(); indice++) {
-			dibujo.drawLine(grilla.centroX(recorrido.get(indice - 1)),
-					grilla.centroY(recorrido.get(indice - 1)),
-					grilla.centroX(recorrido.get(indice)), grilla.centroY(recorrido.get(indice)));
+			Celda anterior = recorrido.get(indice - 1);
+			Celda siguiente = recorrido.get(indice);
+			dibujo.drawLine(grilla.centroX(anterior.columna()), grilla.centroY(anterior.fila()),
+					grilla.centroX(siguiente.columna()), grilla.centroY(siguiente.fila()));
 		}
 	}
 
-	private void dibujarActual(Graphics2D dibujo, Geometria grilla) {
-		Celda actual = estadoJuego().actual();
-		int x = grilla.centroX(actual) - Tema.PUNTO_ACTUAL / 2;
-		int y = grilla.centroY(actual) - Tema.PUNTO_ACTUAL / 2;
-		dibujo.setColor(Tema.TARJETA);
-		dibujo.fillOval(x, y, Tema.PUNTO_ACTUAL, Tema.PUNTO_ACTUAL);
-	}
-
 	private void dibujarNumeros(Graphics2D dibujo, Geometria grilla) {
-		for (int fila = 0; fila < grilla.tamanoNivel(); fila++) {
-			for (int columna = 0; columna < grilla.tamanoNivel(); columna++) {
-				Celda celda = new Celda(fila, columna);
-				int numero = estadoJuego().nivel().numeroEn(celda);
-				if (numero > 0) {
-					dibujarNumero(dibujo, grilla, celda, numero);
-				}
+		List<Integer> numeros = estado.nivel().numeros();
+		int tamano = grilla.tamanoNivel();
+		for (int fila = 0; fila < tamano; fila++) {
+			for (int col = 0; col < tamano; col++) {
+				int numero = numeros.get(fila * tamano + col);
+				if (numero > 0) { dibujarNumero(dibujo, grilla, fila, col, numero); }
 			}
 		}
 	}
 
-	private void dibujarNumero(Graphics2D dibujo, Geometria grilla, Celda celda, int numero) {
-		int diametro = Math.min(Tema.DIAMETRO_NUMERO,
-				grilla.celda() - 2 * Tema.GROSOR_BORDE);
-		int x = grilla.centroX(celda) - diametro / 2;
-		int y = grilla.centroY(celda) - diametro / 2;
-		if (numero < estadoJuego().proximoNumero()) {
-			rellenarNumero(dibujo, x, y, diametro, Tema.ACENTO, Tema.TARJETA);
-		} else if (numero == estadoJuego().proximoNumero()) {
-			delinearNumero(dibujo, x, y, diametro);
-		} else {
-			rellenarNumero(dibujo, x, y, diametro, Tema.TINTA, Tema.TARJETA);
+	private void dibujarNumero(Graphics2D dibujo, Geometria grilla, int fila, int col, int numero) {
+		int diametro = Math.max(1, Math.min(DIAMETRO_NUMERO, grilla.celda() - MARGEN_NUMERO));
+		int x = grilla.centroX(col) - diametro / 2;
+		int y = grilla.centroY(fila) - diametro / 2;
+		int proximo = estado.proximoNumero();
+		dibujo.setColor(numero <= proximo ? Tema.ACENTO : Tema.TINTA);
+		dibujo.fillOval(x, y, diametro, diametro);
+		int interior = diametro - 2 * BORDE_NUMERO;
+		if (numero == proximo && interior > 0) {
+			dibujo.setColor(Tema.TARJETA);
+			dibujo.fillOval(x + BORDE_NUMERO, y + BORDE_NUMERO, interior, interior);
 		}
-		dibujarTextoNumero(dibujo, grilla, celda, numero);
-	}
-
-	private void rellenarNumero(Graphics2D dibujo, int x, int y, int diametro,
-			Color relleno, Color texto) {
-		dibujo.setColor(relleno);
-		dibujo.fill(new Ellipse2D.Float(x, y, diametro, diametro));
-		dibujo.setColor(texto);
-	}
-
-	private void delinearNumero(Graphics2D dibujo, int x, int y, int diametro) {
-		dibujo.setColor(Tema.ACENTO);
-		dibujo.fill(new Ellipse2D.Float(x, y, diametro, diametro));
-		int margen = Tema.BORDE_NUMERO;
-		dibujo.setColor(Tema.TARJETA);
-		dibujo.fill(new Ellipse2D.Float(x + margen, y + margen,
-				diametro - 2 * margen, diametro - 2 * margen));
-		dibujo.setColor(Tema.TINTA);
-	}
-
-	private void dibujarTextoNumero(Graphics2D dibujo, Geometria grilla, Celda celda,
-			int numero) {
-		dibujo.setFont(Tema.fuente(Tema.TAMANO_NUMERO, true));
-		String texto = Integer.toString(numero);
-		FontMetrics metricas = dibujo.getFontMetrics();
-		int x = grilla.centroX(celda) - metricas.stringWidth(texto) / 2;
-		int y = grilla.centroY(celda) + (metricas.getAscent() - metricas.getDescent()) / 2;
-		dibujo.drawString(texto, x, y);
+		dibujo.setColor(numero == proximo ? Tema.TINTA : Tema.TARJETA);
+		texto(dibujo, FUENTE_NUMERO, Integer.toString(numero), grilla.centroX(col), grilla.centroY(fila), false);
 	}
 
 	private void dibujarTomate(Graphics2D dibujo, Geometria grilla) {
-		int centroX = grilla.izquierdaTablero() + grilla.ladoTablero() / 2;
-		int centroY = grilla.superiorTablero() + grilla.ladoTablero() / 2;
-		int radio = (int) (grilla.ladoTablero() * 0.44);
-
-		// Splat blobs overlay - mucho menos transparente (casi opaco para tapar números)
-		Color rojoTomate = new Color(220, 25, 25, 252);
-		Color rojoOscuro = new Color(175, 15, 15, 255);
-		dibujo.setColor(rojoTomate);
-		dibujo.fillOval(centroX - radio, centroY - radio, radio * 2, radio * 2);
-
-		// Splatter droplets gruesos
-		int rBump = (int) (radio * 0.48);
-		dibujo.fillOval(centroX - radio - rBump / 3, centroY - rBump, rBump * 2, rBump * 2);
-		dibujo.fillOval(centroX + radio - rBump, centroY - rBump / 2, rBump * 2, rBump * 2);
-		dibujo.fillOval(centroX - rBump, centroY - radio - rBump / 3, rBump * 2, rBump * 2);
-		dibujo.fillOval(centroX - rBump / 2, centroY + radio - rBump, rBump * 2, rBump * 2);
-
-		int rGota = (int) (radio * 0.25);
-		dibujo.fillOval(centroX - radio - rGota * 2, centroY + radio / 2, rGota * 2, rGota * 2);
-		dibujo.fillOval(centroX + radio + rGota, centroY - radio / 2, rGota * 2, rGota * 2);
-
-		// Pulpa interna oscura densa
-		dibujo.setColor(rojoOscuro);
-		dibujo.fillOval(centroX - radio / 2, centroY - radio / 2, radio, radio);
-
-		// Tomato stem (green leaves)
-		dibujo.setColor(new Color(34, 197, 94));
-		int anchoTallo = (int) (radio * 0.35);
-		int altoTallo = (int) (radio * 0.20);
-		dibujo.fillOval(centroX - anchoTallo / 2, centroY - radio - altoTallo / 2, anchoTallo, altoTallo);
-		int[] talloX = {centroX - anchoTallo / 3, centroX, centroX + anchoTallo / 3};
-		int[] talloY = {centroY - radio, centroY - radio - altoTallo, centroY - radio};
-		dibujo.fillPolygon(talloX, talloY, 3);
-
-		// "¡TOMATAZO!" banner
-		dibujo.setFont(Tema.fuente(Tema.TAMANO_TITULO_PROXIMAMENTE, true));
-		FontMetrics fm = dibujo.getFontMetrics();
-		String texto = "¡TOMATAZO!";
-		int textX = centroX - fm.stringWidth(texto) / 2;
-		int textY = centroY + (fm.getAscent() - fm.getDescent()) / 2;
-
-		// Text shadow
-		dibujo.setColor(new Color(0, 0, 0, 220));
-		dibujo.drawString(texto, textX + 2, textY + 2);
-		// Text
-		dibujo.setColor(Color.WHITE);
-		dibujo.drawString(texto, textX, textY);
+		int cx = grilla.izqTablero() + grilla.ladoTablero() / 2;
+		int cy = grilla.supTablero() + grilla.ladoTablero() / 2;
+		int radio = Math.max(1, (int) (grilla.ladoTablero() * ESCALA_RADIO_TOMATE));
+		dibujarSalpicaduraTomate(dibujo, cx, cy, radio);
+		dibujarGotasTomate(dibujo, cx, cy, radio);
+		dibujarTalloTomate(dibujo, cx, cy, radio);
+		texto(dibujo, FUENTE_TOMATE, TEXTO_TOMATE, cx, cy, true);
 	}
 
-	private record Geometria(int izquierdaTablero, int superiorTablero, int ladoTablero,
-			int izquierdaGrilla, int superiorGrilla, int celda, int tamanoNivel) {
-		int x(Celda posicion) {
-			return izquierdaGrilla + posicion.columna() * (celda + Tema.SEPARACION_CELDAS);
-		}
+	private void dibujarSalpicaduraTomate(Graphics2D dibujo, int cx, int cy, int radio) {
+		dibujo.setColor(TOMATE_CUERPO);
+		dibujo.fillOval(cx - radio, cy - radio, radio * 2, radio * 2);
+		int bulto = (int) (radio * ESCALA_BULTOS_TOMATE);
+		dibujo.fillOval(cx - radio - bulto / DIVISOR_TERCIO, cy - bulto, bulto * 2, bulto * 2);
+		dibujo.fillOval(cx + radio - bulto, cy - bulto / 2, bulto * 2, bulto * 2);
+		dibujo.fillOval(cx - bulto, cy - radio - bulto / DIVISOR_TERCIO, bulto * 2, bulto * 2);
+		dibujo.fillOval(cx - bulto / 2, cy + radio - bulto, bulto * 2, bulto * 2);
+		dibujo.setColor(TOMATE_SOMBRA);
+		dibujo.fillOval(cx - radio / 2, cy - radio / 2, radio, radio);
+	}
 
-		int y(Celda posicion) {
-			return superiorGrilla + posicion.fila() * (celda + Tema.SEPARACION_CELDAS);
-		}
+	private void dibujarGotasTomate(Graphics2D dibujo, int cx, int cy, int radio) {
+		int gota = (int) (radio * ESCALA_GOTA_TOMATE);
+		int brillo = (int) (radio * ESCALA_BRILLO_TOMATE);
+		dibujo.setColor(TOMATE_CUERPO);
+		dibujo.fillOval(cx - radio - gota * 2, cy + radio / 2, gota * 2, gota * 2);
+		dibujo.fillOval(cx + radio + gota, cy - radio / 2, gota * 2, gota * 2);
+		dibujo.setColor(TOMATE_BRILLO);
+		dibujo.fillOval(cx - radio / 2 - brillo / 2, cy - radio / 2 - brillo / 2, brillo, brillo);
+	}
 
-		int centroX(Celda posicion) {
-			return x(posicion) + celda / 2;
-		}
+	private void dibujarTalloTomate(Graphics2D dibujo, int cx, int cy, int radio) {
+		dibujo.setColor(TOMATE_HOJA);
+		int ancho = (int) (radio * ESCALA_ANCHO_TALLO);
+		int alto = (int) (radio * ESCALA_ALTO_TALLO);
+		dibujo.fillOval(cx - ancho / 2, cy - radio - alto / 2, ancho, alto);
+		int[] talloX = {cx - ancho / DIVISOR_TERCIO, cx, cx + ancho / DIVISOR_TERCIO};
+		int[] talloY = {cy - radio, cy - radio - alto, cy - radio};
+		dibujo.fillPolygon(talloX, talloY, VERTICES_TALLO);
+	}
 
-		int centroY(Celda posicion) {
-			return y(posicion) + celda / 2;
+	private void texto(Graphics2D dibujo, Font fuente, String texto, int cx, int cy, boolean sombraTomate) {
+		dibujo.setFont(fuente);
+		FontMetrics metricas = dibujo.getFontMetrics();
+		int x = cx - metricas.stringWidth(texto) / 2;
+		int y = cy + (metricas.getAscent() - metricas.getDescent()) / 2;
+		if (sombraTomate) {
+			dibujo.setColor(TOMATE_SOMBRA_TEXTO);
+			dibujo.drawString(texto, x + 2, y + 2);
+			dibujo.setColor(TOMATE_TEXTO);
 		}
+		dibujo.drawString(texto, x, y);
+	}
+
+	private static void preparar(Graphics2D dibujo) {
+		dibujo.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		dibujo.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		dibujo.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+	}
+
+	private static BasicStroke trazo(float grosor) {
+		return new BasicStroke(grosor, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+	}
+
+	private static Shape redondeado(float x, float y, float ancho, float alto, float radio) {
+		return new RoundRectangle2D.Float(x, y, ancho, alto, radio, radio);
+	}
+
+	private record Geometria(int izqTablero, int supTablero, int ladoTablero,
+			int izqGrilla, int supGrilla, int celda, int tamanoNivel) {
+		int x(int col) { return izqGrilla + col * (celda + SEPARACION_CELDAS); }
+		int y(int fila) { return supGrilla + fila * (celda + SEPARACION_CELDAS); }
+		int centroX(int col) { return x(col) + celda / 2; }
+		int centroY(int fila) { return y(fila) + celda / 2; }
 
 		Optional<Celda> celdaEn(Point punto) {
-			int columna = indiceEn(punto.x - izquierdaGrilla);
-			int fila = indiceEn(punto.y - superiorGrilla);
+			int columna = indiceEn(punto.x - izqGrilla);
+			int fila = indiceEn(punto.y - supGrilla);
 			if (columna < 0 || fila < 0) {
 				return Optional.empty();
 			}
@@ -269,7 +271,7 @@ final class PanelTablero extends JPanel {
 		}
 
 		private int indiceEn(int desplazamiento) {
-			int paso = celda + Tema.SEPARACION_CELDAS;
+			int paso = celda + SEPARACION_CELDAS;
 			if (desplazamiento < 0 || desplazamiento % paso >= celda) {
 				return -1;
 			}
