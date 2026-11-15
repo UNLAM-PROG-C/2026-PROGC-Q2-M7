@@ -14,7 +14,14 @@ public enum TipoEvento {
 
 	INICIAR,
 	DESHACER,
-	REINICIAR;
+	REINICIAR,
+
+	/** Sala multijugador (ver ConfigPartida, network.MensajeRecibido). */
+	MENSAJE_RED,
+	JUGADOR_CONECTADO,
+	JUGADOR_DESCONECTADO,
+	LISTO,
+	VOLVER_SALA;
 
 	/**
 	 * Convierte un texto en un TipoEvento, devolviendo null si no es válido.

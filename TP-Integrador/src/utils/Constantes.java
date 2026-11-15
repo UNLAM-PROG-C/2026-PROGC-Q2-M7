@@ -8,6 +8,7 @@ public final class Constantes {
 	public static final int ROL_LOCAL = 0;
 	public static final int ROL_HOST = 1;
 	public static final int ROL_CLIENTE = 2;
+	public static final int ID_HOST = 0;
 	public static final String COMANDO_SALIR = "salir";
 	
 	// Constantes del motor
