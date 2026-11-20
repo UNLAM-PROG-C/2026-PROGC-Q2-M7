@@ -11,7 +11,6 @@ public final class Constantes {
 	public static final int MIN_JUGADORES_RED = 2;
 	public static final int MAX_JUGADORES_RED = 4;
 	public static final int JUGADORES_RED_POR_DEFECTO = 2;
-	public static final String COMANDO_SALIR = "salir";
 
 	// Constantes del motor
 	public static final int HILOS_TIMER = 1;

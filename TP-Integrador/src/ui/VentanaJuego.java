@@ -121,10 +121,11 @@ public final class VentanaJuego implements AutoCloseable {
 	}
 
 	private int leerPuerto(String texto) {
-		if (!texto.isEmpty() && texto.chars().allMatch(Character::isDigit)) {
-			long valor = Long.parseLong(texto);
+		if (!texto.isEmpty() && texto.length() <= 5
+				&& texto.chars().allMatch(c -> c >= '0' && c <= '9')) {
+			int valor = Integer.parseInt(texto);
 			if (valor >= 1 && valor <= PUERTO_MAXIMO) {
-				return (int) valor;
+				return valor;
 			}
 		}
 		configuracion.error("Puerto inválido: " + texto);
@@ -159,7 +160,7 @@ public final class VentanaJuego implements AutoCloseable {
 			long intento, String prefijoError) {
 		EventBus bus = new EventBus();
 		MotorJuego motor = new MotorJuego(rol, host, puerto, rondas, jugadores, bus,
-				act -> recibir(intento, act));
+				act -> SwingUtilities.invokeLater(() -> recibir(intento, act)));
 		if (!vincularMotor(bus, motor, intento)) {
 			motor.finalizar();
 			return;
@@ -200,7 +201,11 @@ public final class VentanaJuego implements AutoCloseable {
 			if (rol != Constantes.ROL_CLIENTE) {
 				bus.publicar(new Evento(TipoEvento.INICIAR, dificultadActual));
 			} else {
-				SwingUtilities.invokeLater(() -> configuracion.estado("Conectado. Esperando inicio del host..."));
+				SwingUtilities.invokeLater(() -> {
+					if (intento == intentoConexion.get() && CONFIGURACION.equals(pantallaActual)) {
+						configuracion.estado("Conectado. Esperando inicio del host...");
+					}
+				});
 			}
 		}
 	}
@@ -265,8 +270,15 @@ public final class VentanaJuego implements AutoCloseable {
 			return estabaVisible;
 		}
 		String titulo = act.ganoLocal() ? "¡VICTORIA!" : "¡DERROTA!";
-		String marcador = "(" + act.rondasLocal() + " a " + act.rondasRival() + ")";
-		victoria.mostrarFinPartida(titulo, act.mensaje() + " " + marcador);
+		String detalle;
+		if (act.multijugador()) {
+			detalle = act.mensaje() + "<br><b>Marcador: " + act.rondasLocal() + " - " + act.rondasRival() + "</b>";
+		} else {
+			detalle = act.rondasObjetivo() == 1
+					? "¡Completaste el tablero!"
+					: "¡Completaste las " + act.rondasObjetivo() + " rondas!";
+		}
+		victoria.mostrarFinPartida(titulo, detalle, act.multijugador());
 		return false;
 	}
 
