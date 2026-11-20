@@ -11,13 +11,14 @@ public record ActualizacionVista(
 		int rondasRival,
 		int rondasObjetivo,
 		boolean partidaFinalizada,
-		boolean ganoLocal) {
+		boolean ganoLocal,
+		boolean multijugador) {
 
 	public ActualizacionVista {
 		Objects.requireNonNull(mensaje, "mensaje");
 	}
 
 	public ActualizacionVista(EstadoJuego estadoJuego, String mensaje, boolean manchadoPorTomate) {
-		this(estadoJuego, mensaje, manchadoPorTomate, 0, 0, 1, false, false);
+		this(estadoJuego, mensaje, manchadoPorTomate, 0, 0, 1, false, false, false);
 	}
 }

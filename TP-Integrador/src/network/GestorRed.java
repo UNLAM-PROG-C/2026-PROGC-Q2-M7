@@ -1,15 +1,20 @@
 package network;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import events.EventBus;
 import events.Evento;
@@ -18,157 +23,294 @@ import utils.Constantes;
 
 public class GestorRed {
 	private static final int TIMEOUT_CONEXION_MS = 5000;
-	private static final Object LOCK_ESPERA = new Object();
-	private static final Map<Thread, Boolean> ESPERAS_CANCELADAS = new WeakHashMap<>();
-	private static ServerSocket serverSocketPendiente;
 
-	private final Socket socket;
+	private final int rol;
+	private final String host;
+	private final int puerto;
+	private final int clientesEsperados;
 	private final EventBus bus;
-	private final PrintWriter salida;
-	private final BufferedReader entrada;
+	private final Object lockEstado = new Object();
+	private final Map<Integer, Socket> sockets = new ConcurrentHashMap<>();
+	private final Map<Integer, PrintWriter> salidas = new ConcurrentHashMap<>();
+	private final AtomicInteger generadorId = new AtomicInteger(1);
+	private final AtomicBoolean conectado = new AtomicBoolean();
+	private final AtomicBoolean listo = new AtomicBoolean();
+	private final AtomicBoolean cerrado = new AtomicBoolean();
+	private ServerSocket servidor;
+	private Socket socketConectando;
 
-	public static void registrarEspera(Thread hilo) {
-		synchronized (LOCK_ESPERA) {
-			ESPERAS_CANCELADAS.put(hilo, Boolean.FALSE);
-		}
+	public GestorRed(int rol, EventBus bus) {
+		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, 1, bus);
 	}
 
-	public static void limpiarEspera(Thread hilo) {
-		synchronized (LOCK_ESPERA) {
-			ESPERAS_CANCELADAS.remove(hilo);
-		}
+	public GestorRed(int rol, String host, int puerto, EventBus bus) {
+		this(rol, host, puerto, 1, bus);
 	}
 
-	public static void cancelarEsperaServidor() {
-		ServerSocket pendiente;
-		synchronized (LOCK_ESPERA) {
-			ESPERAS_CANCELADAS.replaceAll((hilo, cancelada) -> Boolean.TRUE);
-			pendiente = serverSocketPendiente;
-			serverSocketPendiente = null;
-		}
-		cerrarSilencioso(pendiente);
-	}
-
-	public GestorRed(int rol, EventBus bus) throws IOException {
-		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, bus);
-	}
-
-	public GestorRed(int rol, String host, int puerto, EventBus bus) throws IOException {
-		this.socket = obtenerSocket(rol, host, puerto);
+	public GestorRed(int rol, String host, int puerto, int clientesEsperados, EventBus bus) {
+		this.rol = rol;
+		this.host = host;
+		this.puerto = puerto;
+		this.clientesEsperados = Math.max(1, clientesEsperados);
 		this.bus = bus;
-		this.salida = new PrintWriter(socket.getOutputStream(), true);
-		this.entrada = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 	}
 
-	private Socket obtenerSocket(int rol, String host, int puerto) throws IOException {
+	public void conectar() throws IOException {
+		if (!conectado.compareAndSet(false, true)) {
+			return;
+		}
+		if (cerrado.get()) {
+			throw new IOException("Conexión cancelada.");
+		}
 		if (rol == Constantes.ROL_HOST) {
-			return esperarCliente(puerto);
+			esperarClientes();
+		} else {
+			conectarComoCliente();
 		}
-		return conectarCliente(host, puerto);
 	}
 
-	private Socket esperarCliente(int puerto) throws IOException {
-		System.out.println("Esperando rival en puerto " + puerto + "...");
-		ServerSocket server = abrirServidorPendiente(puerto);
-		try {
-			return server.accept();
-		} catch (SocketException e) {
-			if (server.isClosed()) {
-				throw new IOException("Espera de host cancelada.", e);
+	public int clientesConectados() {
+		return salidas.size();
+	}
+
+	private void esperarClientes() throws IOException {
+		ServerSocket server = abrirServidor(puerto);
+		boolean cancelado = false;
+		synchronized (lockEstado) {
+			if (cerrado.get()) {
+				cancelado = true;
+			} else {
+				this.servidor = server;
 			}
-			throw e;
-		} finally {
-			limpiarServidorPendiente(server);
 		}
-	}
-
-	private static ServerSocket abrirServidorPendiente(int puerto) throws IOException {
-		ServerSocket server = new ServerSocket();
+		if (cancelado) {
+			cerrarRecurso(server);
+			throw new IOException("Espera de host cancelada.");
+		}
 		try {
-			vincularServidor(server, puerto);
-			return server;
+			aceptarHastaCompletarCupo(server);
 		} catch (IOException e) {
-			cerrarSilencioso(server);
-			throw e;
-		}
-	}
-
-	private static void vincularServidor(ServerSocket server, int puerto) throws IOException {
-		synchronized (LOCK_ESPERA) {
-			if (Boolean.TRUE.equals(ESPERAS_CANCELADAS.remove(Thread.currentThread()))) {
-				throw new IOException("Espera de host cancelada.");
-			}
-			server.setReuseAddress(true);
-			server.bind(new InetSocketAddress(puerto));
-			serverSocketPendiente = server;
-		}
-	}
-
-	private static void limpiarServidorPendiente(ServerSocket server) {
-		synchronized (LOCK_ESPERA) {
-			if (serverSocketPendiente == server) {
-				serverSocketPendiente = null;
-			}
-		}
-		cerrarSilencioso(server);
-	}
-
-	private static void cerrarSilencioso(ServerSocket server) {
-		if (server != null && !server.isClosed()) {
-			try {
-				server.close();
-			} catch (IOException ignored) {}
-		}
-	}
-
-	private Socket conectarCliente(String host, int puerto) throws IOException {
-		System.out.println("Conectando a " + host + ":" + puerto + "...");
-		Socket cliente = new Socket();
-		cliente.setReuseAddress(true);
-		cliente.connect(new InetSocketAddress(host, puerto), TIMEOUT_CONEXION_MS);
-		return cliente;
-	}
-
-	public void iniciarEscucha() {
-		Thread hiloDeRed = new Thread(this::leerMensajes, "Thread-Red");
-		hiloDeRed.setDaemon(true);
-		hiloDeRed.start();
-	}
-
-	private void leerMensajes() {
-		try {
-			String linea;
-			while ((linea = entrada.readLine()) != null) {
-				TipoEvento tipo = TipoEvento.desdeTexto(linea);
-				if (tipo != null) {
-					bus.publicar(new Evento(tipo));
+			cerrarConexionesActivas();
+			throw cerrado.get() ? new IOException("Espera de host cancelada.", e) : e;
+		} finally {
+			synchronized (lockEstado) {
+				if (this.servidor == server) {
+					this.servidor = null;
 				}
 			}
-		} catch (IOException e) {
-			// Red cerrada
-		} finally {
-			bus.publicar(new Evento(TipoEvento.CONEXION_PERDIDA));
+			cerrarRecurso(server);
 		}
+	}
+
+	private void aceptarHastaCompletarCupo(ServerSocket server) throws IOException {
+		while (true) {
+			synchronized (lockEstado) {
+				if (cerrado.get()) {
+					throw new IOException("Espera de host cancelada.");
+				}
+				if (salidas.size() >= clientesEsperados) {
+					listo.set(true);
+					return;
+				}
+			}
+			registrarConexion(server.accept());
+		}
+	}
+
+	private void conectarComoCliente() throws IOException {
+		Socket cliente = new Socket();
+		boolean cancelado = false;
+		synchronized (lockEstado) {
+			if (cerrado.get()) {
+				cancelado = true;
+			} else {
+				this.socketConectando = cliente;
+			}
+		}
+		if (cancelado) {
+			cerrarRecurso(cliente);
+			throw new IOException("Conexión cancelada.");
+		}
+		try {
+			cliente.setReuseAddress(true);
+			cliente.connect(new InetSocketAddress(host, puerto), TIMEOUT_CONEXION_MS);
+			synchronized (lockEstado) {
+				this.socketConectando = null;
+				if (cerrado.get()) {
+					cancelado = true;
+				} else {
+					listo.set(true);
+				}
+			}
+			if (cancelado) {
+				cerrarRecurso(cliente);
+				throw new IOException("Conexión cancelada.");
+			}
+			registrarConexion(cliente);
+		} catch (IOException e) {
+			synchronized (lockEstado) {
+				if (this.socketConectando == cliente) {
+					this.socketConectando = null;
+				}
+			}
+			cerrarRecurso(cliente);
+			throw cerrado.get() ? new IOException("Conexión cancelada.", e) : e;
+		}
+	}
+
+	private static ServerSocket abrirServidor(int puerto) throws IOException {
+		ServerSocket server = new ServerSocket();
+		try {
+			server.setReuseAddress(true);
+			server.bind(new InetSocketAddress(puerto));
+			return server;
+		} catch (IOException e) {
+			cerrarRecurso(server);
+			throw e;
+		}
+	}
+
+	private void registrarConexion(Socket socket) throws IOException {
+		PrintWriter salida = new PrintWriter(socket.getOutputStream(), true, StandardCharsets.UTF_8);
+		int id;
+		boolean cancelado = false;
+		synchronized (lockEstado) {
+			if (cerrado.get()) {
+				cancelado = true;
+				id = -1;
+			} else {
+				id = generadorId.getAndIncrement();
+				sockets.put(id, socket);
+				salidas.put(id, salida);
+			}
+		}
+		if (cancelado) {
+			salida.close();
+			cerrarRecurso(socket);
+			throw new IOException("Conexión cancelada.");
+		}
+		iniciarLector(id, socket);
+	}
+
+	private void iniciarLector(int id, Socket socket) {
+		Thread hilo = new Thread(() -> leerMensajes(id, socket), "Thread-Red-" + id);
+		hilo.setDaemon(true);
+		hilo.start();
+	}
+
+	private void leerMensajes(int id, Socket socket) {
+		try (BufferedReader entrada = new BufferedReader(
+				new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+			String linea;
+			while (!cerrado.get() && (linea = entrada.readLine()) != null) {
+				procesarLinea(id, linea);
+			}
+		} catch (IOException e) {
+			if (!cerrado.get()) {
+				System.err.println("[RED] Conexión " + id + " finalizada: " + e.getMessage());
+			}
+		} finally {
+			desconectar(id, socket);
+		}
+	}
+
+	private void procesarLinea(int idOrigen, String linea) {
+		Evento evento = Evento.desdeLineaRed(linea);
+		if (evento == null) {
+			return;
+		}
+		if (rol == Constantes.ROL_HOST && esReenviable(evento.tipo())) {
+			reenviarExcepto(idOrigen, linea);
+		}
+		if (evento.tipo() == TipoEvento.SOLICITAR_REVANCHA) {
+			bus.publicar(new Evento(TipoEvento.SOLICITAR_REVANCHA, idOrigen));
+		} else {
+			bus.publicar(evento);
+		}
+	}
+
+	private static boolean esReenviable(TipoEvento tipo) {
+		return tipo == TipoEvento.RIVAL_COMPLETO_GRILLA || tipo == TipoEvento.PARTIDA_FINALIZADA;
+	}
+
+	private void reenviarExcepto(int idOrigen, String linea) {
+		salidas.forEach((id, salida) -> {
+			if (id != idOrigen) {
+				salida.println(linea);
+			}
+		});
 	}
 
 	public void enviarEvento(TipoEvento tipo) {
-		if (salida != null && tipo != null) {
-			salida.println(tipo.name());
+		enviarEvento(tipo, null);
+	}
+
+	public void enviarEvento(TipoEvento tipo, Object datos) {
+		if (tipo == null || cerrado.get()) {
+			return;
+		}
+		String linea = new Evento(tipo, datos).aLineaRed();
+		salidas.values().forEach(salida -> salida.println(linea));
+	}
+
+	private void desconectar(int id, Socket socket) {
+		boolean notificar;
+		boolean sinClientes;
+		synchronized (lockEstado) {
+			salidas.remove(id);
+			sockets.remove(id);
+			notificar = !cerrado.get() && listo.get();
+			sinClientes = salidas.isEmpty();
+		}
+		cerrarRecurso(socket);
+		if (!notificar) {
+			return;
+		}
+		if (sinClientes) {
+			bus.publicar(new Evento(TipoEvento.CONEXION_PERDIDA));
+		} else {
+			bus.publicar(new Evento(TipoEvento.JUGADOR_DESCONECTADO, id));
 		}
 	}
 
-	public void cerrar() throws IOException {
-		cancelarEsperaServidor();
-		if (salida != null) {
-			salida.close();
+	public void cerrar() {
+		ServerSocket serverCerrar;
+		Socket conectandoCerrar;
+		synchronized (lockEstado) {
+			if (!cerrado.compareAndSet(false, true)) {
+				return;
+			}
+			serverCerrar = this.servidor;
+			this.servidor = null;
+			conectandoCerrar = this.socketConectando;
+			this.socketConectando = null;
 		}
-		if (entrada != null) {
-			try {
-				entrada.close();
-			} catch (IOException ignored) {}
+		cerrarRecurso(serverCerrar);
+		cerrarRecurso(conectandoCerrar);
+		cerrarConexionesActivas();
+	}
+
+	private void cerrarConexionesActivas() {
+		List<PrintWriter> salidasACerrar;
+		List<Socket> socketsACerrar;
+		synchronized (lockEstado) {
+			salidasACerrar = new ArrayList<>(salidas.values());
+			salidas.clear();
+			socketsACerrar = new ArrayList<>(sockets.values());
+			sockets.clear();
 		}
-		if (socket != null && !socket.isClosed()) {
-			socket.close();
+		salidasACerrar.forEach(PrintWriter::close);
+		socketsACerrar.forEach(GestorRed::cerrarRecurso);
+	}
+
+	private static void cerrarRecurso(Closeable recurso) {
+		if (recurso == null) {
+			return;
+		}
+		try {
+			recurso.close();
+		} catch (IOException e) {
+			System.err.println("[RED] Error al cerrar recurso: " + e.getMessage());
 		}
 	}
 }

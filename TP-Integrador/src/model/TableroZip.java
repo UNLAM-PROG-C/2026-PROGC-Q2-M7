@@ -11,6 +11,7 @@ public final class TableroZip {
 
 	private final Nivel nivel;
 	private final List<Celda> recorrido = new ArrayList<>();
+	private int proximoNumero;
 
 	public TableroZip(Nivel nivel) {
 		this.nivel = Objects.requireNonNull(nivel, NIVEL_NULO);
@@ -22,7 +23,7 @@ public final class TableroZip {
 	}
 
 	public EstadoJuego estadoJuego() {
-		return new EstadoJuego(nivel, recorrido);
+		return EstadoJuego.desdeTablero(nivel, recorrido, proximoNumero);
 	}
 
 	public ResultadoMovimiento mover(Direccion direccion) {
@@ -34,6 +35,9 @@ public final class TableroZip {
 		ResultadoMovimiento resultado = ReglasJuego.evaluar(nivel, recorrido, siguiente);
 		if (resultado == ResultadoMovimiento.VALIDO || resultado == ResultadoMovimiento.FINALIZADO) {
 			recorrido.add(siguiente);
+			if (nivel.numeroEn(siguiente) > 0) {
+				proximoNumero++;
+			}
 		}
 		return resultado;
 	}
@@ -68,12 +72,16 @@ public final class TableroZip {
 		if (recorrido.size() == 1 || recorrido.size() == nivel.cantidadCeldas()) {
 			return false;
 		}
-		recorrido.remove(recorrido.size() - 1);
+		Celda removida = recorrido.remove(recorrido.size() - 1);
+		if (nivel.numeroEn(removida) > 0) {
+			proximoNumero--;
+		}
 		return true;
 	}
 
 	public void reiniciar() {
 		recorrido.clear();
 		recorrido.add(nivel.inicio());
+		proximoNumero = 2;
 	}
 }

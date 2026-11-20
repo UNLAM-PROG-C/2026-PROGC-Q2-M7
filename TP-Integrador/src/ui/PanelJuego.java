@@ -39,6 +39,7 @@ final class PanelJuego extends JPanel {
 	private final JLabel estadoMensaje = crearEtiquetaCentrada(" ", "estado-mensaje");
 	private final JButton deshacer = Tema.boton("Deshacer", false);
 	private final JButton reiniciar = Tema.boton("Reiniciar", false);
+	private final JButton volver = Tema.boton("Volver al menú", false);
 	private final transient AdaptadorMouse adaptadorMouse = new AdaptadorMouse(tablero, this::irA);
 	private final transient Consumer<Direccion> mover;
 	private final transient Consumer<DestinoCelda> irA;
@@ -91,7 +92,6 @@ final class PanelJuego extends JPanel {
 	private JPanel barraSuperior(Runnable accionVolver) {
 		JPanel barra = new JPanel(new BorderLayout());
 		barra.setOpaque(false);
-		JButton volver = Tema.boton("Desconectar / Menú", false);
 		volver.setName("volver");
 		volver.addActionListener(evento -> accionVolver.run());
 		barra.add(Tema.etiqueta("ZIP", Font.BOLD, Tema.TAMANO_TITULO, Tema.TINTA), BorderLayout.WEST);
@@ -177,14 +177,24 @@ final class PanelJuego extends JPanel {
 		siguiente.setText("Próximo: " + textoSiguiente(act, estadoJuego));
 		progreso.setValue((int) Math.round(PROGRESO_MAXIMO
 				* (double) estadoJuego.visitadas() / estadoJuego.nivel().cantidadCeldas()));
-		deshacer.setEnabled(jugando && estadoJuego.visitadas() > 1);
+		boolean puedeRetroceder = jugando && estadoJuego.visitadas() > 1;
+		deshacer.setEnabled(puedeRetroceder);
+		reiniciar.setEnabled(puedeRetroceder);
+		volver.setText(act.multijugador() ? "Desconectar" : "Menú");
+		estadoMensaje.setForeground(act.manchadoPorTomate() ? Tema.ERROR : Tema.TINTA_SUAVE);
 		estadoMensaje.setText(act.mensaje());
 	}
 
 	private String textoSiguiente(ActualizacionVista act, EstadoJuego estadoJuego) {
 		String texto = estadoJuego.gano() ? "Completado" : Integer.toString(estadoJuego.proximoNumero());
 		if (act.rondasObjetivo() > 1) {
-			texto += " · " + act.rondasLocal() + "-" + act.rondasRival() + " (" + act.rondasObjetivo() + ")";
+			if (act.multijugador()) {
+				texto += " · Vos " + act.rondasLocal() + " - " + act.rondasRival()
+						+ " Rival (a " + act.rondasObjetivo() + ")";
+			} else {
+				texto += " · Ronda " + Math.min(act.rondasLocal() + 1, act.rondasObjetivo())
+						+ "/" + act.rondasObjetivo();
+			}
 		}
 		return texto;
 	}

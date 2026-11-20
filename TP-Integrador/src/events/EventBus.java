@@ -4,13 +4,15 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class EventBus {
-	private final BlockingQueue<Evento> colaEventos = new LinkedBlockingQueue<>();
+	public static final int CAPACIDAD_MAXIMA = 256;
 
-	public void publicar(Evento e) {
+	private final BlockingQueue<Evento> colaEventos = new LinkedBlockingQueue<>(CAPACIDAD_MAXIMA);
+
+	public boolean publicar(Evento e) {
 		if (e == null || e.tipo() == null) {
-			return;
+			return false;
 		}
-		colaEventos.offer(e);
+		return colaEventos.offer(e);
 	}
 
 	public Evento tomar() throws InterruptedException {

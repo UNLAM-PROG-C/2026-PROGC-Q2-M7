@@ -8,16 +8,19 @@ public final class Constantes {
 	public static final int ROL_LOCAL = 0;
 	public static final int ROL_HOST = 1;
 	public static final int ROL_CLIENTE = 2;
-	public static final String COMANDO_SALIR = "salir";
-	
+	public static final int MIN_JUGADORES_RED = 2;
+	public static final int MAX_JUGADORES_RED = 4;
+	public static final int JUGADORES_RED_POR_DEFECTO = 2;
+
 	// Constantes del motor
 	public static final int HILOS_TIMER = 1;
 	public static final int SEGUNDOS_TOMATE = 4;
-	
+
 	// Constantes de rondas
 	public static final int MIN_RONDAS = 1;
 	public static final int MAX_RONDAS = 5;
 	public static final int RONDAS_POR_DEFECTO = 3;
-	
-	private Constantes() {}
+
+	private Constantes() {
+	}
 }

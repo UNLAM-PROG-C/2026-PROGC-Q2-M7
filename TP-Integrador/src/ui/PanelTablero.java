@@ -161,19 +161,19 @@ final class PanelTablero extends JPanel {
 	private void dibujarNumeros(Graphics2D dibujo, Geometria grilla) {
 		List<Integer> numeros = estado.nivel().numeros();
 		int tamano = grilla.tamanoNivel();
+		int proximo = estado.proximoNumero();
 		for (int fila = 0; fila < tamano; fila++) {
 			for (int col = 0; col < tamano; col++) {
 				int numero = numeros.get(fila * tamano + col);
-				if (numero > 0) { dibujarNumero(dibujo, grilla, fila, col, numero); }
+				if (numero > 0) { dibujarNumero(dibujo, grilla, fila, col, numero, proximo); }
 			}
 		}
 	}
 
-	private void dibujarNumero(Graphics2D dibujo, Geometria grilla, int fila, int col, int numero) {
+	private void dibujarNumero(Graphics2D dibujo, Geometria grilla, int fila, int col, int numero, int proximo) {
 		int diametro = Math.max(1, Math.min(DIAMETRO_NUMERO, grilla.celda() - MARGEN_NUMERO));
 		int x = grilla.centroX(col) - diametro / 2;
 		int y = grilla.centroY(fila) - diametro / 2;
-		int proximo = estado.proximoNumero();
 		dibujo.setColor(numero <= proximo ? Tema.ACENTO : Tema.TINTA);
 		dibujo.fillOval(x, y, diametro, diametro);
 		int interior = diametro - 2 * BORDE_NUMERO;
