@@ -23,6 +23,7 @@ public final class SolucionadorZip {
 	private int[] pistas;
 	private int[] referencia;
 	private int[] alternativa;
+	private int celdaInicio;
 	private int celdaFinal;
 	private int limite;
 	private int encontradas;
@@ -49,11 +50,13 @@ public final class SolucionadorZip {
 
 	public int contar(int[] pistas, int limite, int[] referencia) {
 		reiniciar(pistas, limite, referencia);
-		int inicio = celdaDe(PRIMER_NUMERO);
-		visitada[inicio] = true;
-		camino[0] = inicio;
-		buscar(inicio, 1, SEGUNDO_NUMERO);
-		visitada[inicio] = false;
+		if (celdaInicio == SIN_CELDA) {
+			return 0;
+		}
+		visitada[celdaInicio] = true;
+		camino[0] = celdaInicio;
+		buscar(celdaInicio, 1, SEGUNDO_NUMERO);
+		visitada[celdaInicio] = false;
 		return abortado ? ABORTADO : encontradas;
 	}
 
@@ -83,23 +86,26 @@ public final class SolucionadorZip {
 		this.nodos = 0;
 		this.abortado = false;
 		Arrays.fill(visitada, false);
-		this.celdaFinal = celdaDe(Arrays.stream(pistas).max().orElse(PRIMER_NUMERO));
-	}
-
-	private int celdaDe(int numero) {
+		this.celdaInicio = SIN_CELDA;
+		this.celdaFinal = SIN_CELDA;
+		int numeroMaximo = 0;
 		for (int celda = 0; celda < total; celda++) {
-			if (pistas[celda] == numero) {
-				return celda;
+			int numero = pistas[celda];
+			if (numero == PRIMER_NUMERO) {
+				this.celdaInicio = celda;
+			}
+			if (numero > numeroMaximo) {
+				numeroMaximo = numero;
+				this.celdaFinal = celda;
 			}
 		}
-		return SIN_CELDA;
 	}
 
 	private void buscar(int actual, int largo, int siguiente) {
 		if (encontradas >= limite || abortado) {
 			return;
 		}
-		if (++nodos > topeNodos) {
+		if (++nodos > topeNodos || ((nodos & 0xFFL) == 0 && Thread.currentThread().isInterrupted())) {
 			abortado = true;
 		} else if (largo == total) {
 			registrar();

@@ -48,32 +48,60 @@ This repository contains our practical work for the Concurrent Programming cours
 
 ## Project structure
 
-```bash
+```text
 TP-Integrador/
-│
-├── .devcontainer/        # DevContainer configuration files.
-│   └── devcontainer.json # DevContainer definition (tools, extensions, and settings).
-│
-├── docs/                 # Documentation files, such as diagrams, images, and other statics.
-│   ├── statics/          # Static assets used by the documentation.
-│   │   └── billboard.png # Repository billboard image.
-│   └── arquitectura.html # Interactive architecture walkthrough.
-│
+├── .devcontainer/
+│   └── devcontainer.json          # DevContainer definition (Java, EditorConfig, extensions)
+├── docs/
+│   ├── openspec/
+│   │   └── Propuesta.md           # Project specification and concurrency design summary
+│   └── statics/
+│       └── billboard.png          # Repository banner image
 ├── scripts/
-│   ├── build.sh          # Script to build the project.
-│   ├── health-check.sh   # Script to check that the necessary tools are installed.
-│   └── run.sh            # Script to run the project.
-│
+│   ├── build.sh                   # Compiles src/ with --release 17 -Xlint:all into build/app.jar
+│   ├── health-check.sh            # Checks java, javac, and jar availability
+│   ├── run.sh                     # Builds and launches Main
+│   └── test.sh                    # Compiles and executes the dependency-free test suite
 ├── src/
-│   ├── utils/            # Package with utility classes and functions.
-│   │
-│   └── Main.java         # Entry point of the project.
-│
-├── .editorconfig         # Configuration to standardize code style across different IDEs.
-├── .gitattributes        # Configuration for Git attributes.
-├── .gitignore            # List of all files and folders that Git should ignore.
-├── .sdkmanrc             # Configuration file for SDKMAN! to manage Java versions.
-└── README.md             # This file.
+│   ├── controller/
+│   │   ├── ActualizacionVista.java # Immutable UI view-state snapshot
+│   │   └── MotorJuego.java        # Single-consumer event loop, game flow, and tomato timer
+│   ├── events/
+│   │   ├── DestinoCelda.java      # Level-tagged mouse target payload
+│   │   ├── EventBus.java          # Bounded BlockingQueue producer-consumer bus
+│   │   ├── Evento.java            # Event record and TCP line codec
+│   │   └── TipoEvento.java        # Event type enumeration
+│   ├── model/
+│   │   ├── Celda.java             # Grid coordinate record
+│   │   ├── Dificultad.java        # Grid sizes and checkpoint counts
+│   │   ├── Direccion.java         # Orthogonal movement directions
+│   │   ├── EstadoJuego.java       # Immutable board state snapshot
+│   │   ├── GeneradorNivel.java    # Backbite Hamiltonian generator with unique-solution minimization
+│   │   ├── Nivel.java             # Immutable puzzle definition
+│   │   ├── ReglasJuego.java       # Movement and path validation rules
+│   │   ├── ResultadoMovimiento.java # Move evaluation outcomes and user messages
+│   │   ├── SolucionadorZip.java   # Backtracking solver with pruning and interruption support
+│   │   └── TableroZip.java        # Stateful board progression and undo/rewind logic
+│   ├── network/
+│   │   └── GestorRed.java         # TCP Host/Client connection manager and multi-peer relay
+│   ├── ui/
+│   │   ├── AdaptadorMouse.java    # Mouse drag-to-cell input adapter
+│   │   ├── CapaVictoria.java      # End-of-match glass-pane overlay
+│   │   ├── PanelConfiguracion.java # Unified Multiplayer/Single-Player configuration screen
+│   │   ├── PanelJuego.java        # Gameplay screen, HUD, and keyboard bindings
+│   │   ├── PanelTablero.java      # Custom 2D grid, path, number, and tomato renderer
+│   │   ├── Tema.java              # Swing palette, typography, and component factory
+│   │   └── VentanaJuego.java      # Main JFrame coordinator and connection lifecycle guard
+│   ├── utils/
+│   │   └── Constantes.java        # Network, timer, and round defaults
+│   └── Main.java                  # Application entry point
+├── test/
+│   └── PruebasZip.java            # Automated model, generator, bus, engine, and TCP tests
+├── .editorconfig                  # Formatting rules across IDEs
+├── .gitattributes                 # Line-ending normalization
+├── .gitignore                     # Ignored build artifacts
+├── .sdkmanrc                      # SDKMAN! Java version
+└── README.md                      # This file
 ```
 
 ## Development team

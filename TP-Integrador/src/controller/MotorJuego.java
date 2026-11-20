@@ -4,12 +4,12 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import javax.swing.SwingUtilities;
 
 import events.DestinoCelda;
 import events.EventBus;
@@ -19,6 +19,7 @@ import model.Dificultad;
 import model.Direccion;
 import model.EstadoJuego;
 import model.GeneradorNivel;
+import model.Nivel;
 import model.ResultadoMovimiento;
 import model.TableroZip;
 import network.GestorRed;
@@ -31,8 +32,12 @@ public class MotorJuego {
 	private final int rol;
 	private final EventBus bus;
 	private final GestorRed red;
-	private final ScheduledExecutorService timer =
-			Executors.newScheduledThreadPool(Constantes.HILOS_TIMER);
+	private final ScheduledExecutorService timer = Executors.newScheduledThreadPool(
+			Constantes.HILOS_TIMER, tarea -> {
+				Thread hilo = new Thread(tarea, "Thread-Timer-Tomate");
+				hilo.setDaemon(true);
+				return hilo;
+			});
 	private final Consumer<ActualizacionVista> vista;
 	private final Set<Integer> revanchasClientes = new HashSet<>();
 	private Thread hiloConsumidor;
@@ -216,14 +221,19 @@ public class MotorJuego {
 
 	private void iniciarPartidaConSemilla(long semilla) {
 		cancelarTomate();
-		this.generador = new GeneradorNivel(semilla);
+		GeneradorNivel nuevoGenerador = new GeneradorNivel(semilla);
+		Nivel nivel = nuevoGenerador.generar(dificultadActual);
+		if (Thread.currentThread().isInterrupted()) {
+			return;
+		}
+		this.generador = nuevoGenerador;
 		this.rondasGanadasLocal = 0;
 		this.rondasGanadasRival = 0;
 		this.partidaFinalizada = false;
 		this.manchadoPorTomate = false;
 		this.revanchaLocal = false;
 		this.revanchasClientes.clear();
-		this.tablero = new TableroZip(generador.generar(dificultadActual));
+		this.tablero = new TableroZip(nivel);
 		notificarVista("¡Partida iniciada! Conectá los números en orden.");
 	}
 
@@ -248,9 +258,10 @@ public class MotorJuego {
 			return;
 		}
 		ResultadoMovimiento resultado = tablero.mover(direccion);
-		notificarVista(resultado.mensaje());
-		if (tablero.estadoJuego().gano()) {
+		if (resultado == ResultadoMovimiento.FINALIZADO) {
 			procesarGrillaCompleta();
+		} else {
+			notificarVista(resultado.mensaje());
 		}
 	}
 
@@ -263,9 +274,10 @@ public class MotorJuego {
 		if (resultado == ResultadoMovimiento.SIN_EFECTO) {
 			return;
 		}
-		notificarVista(resultado.mensaje());
-		if (tablero.estadoJuego().gano()) {
+		if (resultado == ResultadoMovimiento.FINALIZADO) {
 			procesarGrillaCompleta();
+		} else {
+			notificarVista(resultado.mensaje());
 		}
 	}
 
@@ -288,15 +300,23 @@ public class MotorJuego {
 		if (red != null) {
 			red.enviarEvento(TipoEvento.PARTIDA_FINALIZADA);
 		}
-		notificarVista("¡GANASTE LA PARTIDA! (" + rondasGanadasLocal + " - " + rondasGanadasRival + ")");
+		notificarVista(rol == Constantes.ROL_LOCAL
+				? "¡Completaste todas las rondas!"
+				: "¡Ganaste la partida!");
 	}
 
 	private void avanzarSiguienteRonda() {
 		cancelarTomate();
-		notificarVista("¡Ronda ganada! (" + rondasGanadasLocal + "/" + rondasObjetivo + "). Siguiente ronda...");
-		this.tablero = new TableroZip(generador.generar(dificultadActual));
+		Nivel siguiente = generador.generar(dificultadActual);
+		if (Thread.currentThread().isInterrupted()) {
+			return;
+		}
+		this.tablero = new TableroZip(siguiente);
 		this.manchadoPorTomate = false;
-		notificarVista("Nueva ronda. Marcador: Vos " + rondasGanadasLocal + " - " + rondasGanadasRival + " Rival");
+		String mensaje = rol == Constantes.ROL_LOCAL
+				? "¡Ronda " + rondasGanadasLocal + "/" + rondasObjetivo + " completada! Siguiente tablero."
+				: "¡Ronda ganada! Nueva ronda · Vos " + rondasGanadasLocal + " - " + rondasGanadasRival + " Rival";
+		notificarVista(mensaje);
 	}
 
 	private void procesarRivalCompletoGrilla(Object payload) {
@@ -309,17 +329,26 @@ public class MotorJuego {
 			return;
 		}
 		manchadoPorTomate = true;
+		programarLimpiezaTomate();
 		notificarVista("¡Rival completó grilla! (" + rondasGanadasLocal + " - "
 				+ rondasGanadasRival + ") ¡Tomatazo recibido!");
-		programarLimpiezaTomate();
 	}
 
 	private void programarLimpiezaTomate() {
 		cancelarTomate();
-		tareaTomate = timer.schedule(
-				() -> bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE)),
-				Constantes.SEGUNDOS_TOMATE,
-				TimeUnit.SECONDS);
+		if (timer.isShutdown() || Thread.currentThread().isInterrupted()) {
+			return;
+		}
+		try {
+			tareaTomate = timer.schedule(
+					() -> bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE)),
+					Constantes.SEGUNDOS_TOMATE,
+					TimeUnit.SECONDS);
+		} catch (RejectedExecutionException e) {
+			if (!timer.isShutdown()) {
+				throw e;
+			}
+		}
 	}
 
 	private void cancelarTomate() {
@@ -389,8 +418,9 @@ public class MotorJuego {
 					rondasGanadasRival,
 					rondasObjetivo,
 					partidaFinalizada,
-					partidaFinalizada && rondasGanadasLocal >= rondasObjetivo);
-			SwingUtilities.invokeLater(() -> vista.accept(actualizacion));
+					partidaFinalizada && rondasGanadasLocal >= rondasObjetivo,
+					rol != Constantes.ROL_LOCAL);
+			vista.accept(actualizacion);
 		}
 	}
 

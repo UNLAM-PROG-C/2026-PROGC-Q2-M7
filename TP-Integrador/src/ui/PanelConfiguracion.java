@@ -266,8 +266,9 @@ final class PanelConfiguracion extends JPanel {
 		etiquetaRondas.setText(txtRondas);
 		etiquetaJugadores.setText(cantidadJugadores() + " jugadores");
 		Dificultad d = dificultadSeleccionada;
+		String reglaRondas = rondas == 1 ? "1 ronda" : "Primero a " + txtRondas;
 		String base = DIFICULTADES[d.ordinal()] + " " + d.tamano() + "×" + d.tamano()
-				+ " · Al mejor de " + txtRondas;
+				+ " · " + reglaRondas;
 		aplicarTextoSegunRol(base);
 	}
 
@@ -278,7 +279,7 @@ final class PanelConfiguracion extends JPanel {
 					+ Constantes.PUERTO + ")");
 		} else if (rolSeleccionado == Constantes.ROL_CLIENTE) {
 			accionPrincipal.setText("Unirse a partida (Cliente)");
-			estadoMensaje.setText("Conectarse como cliente al host en puerto " + Constantes.PUERTO);
+			estadoMensaje.setText("Conectarse como cliente a la dirección ingresada");
 		} else {
 			accionPrincipal.setText("Jugar (Un jugador)");
 			estadoMensaje.setText("Un jugador · " + resumenBase);
@@ -303,7 +304,7 @@ final class PanelConfiguracion extends JPanel {
 	}
 
 	private static String textoDificultad(Dificultad d) {
-		return "<html><b>" + DIFICULTADES[d.ordinal()] + "<br><big>"
-				+ d.tamano() + "×" + d.tamano() + "</big></b><br>";
+		return "<html><div style='text-align:center'><b>" + DIFICULTADES[d.ordinal()] + "<br><big>"
+				+ d.tamano() + "×" + d.tamano() + "</big></b></div></html>";
 	}
 }

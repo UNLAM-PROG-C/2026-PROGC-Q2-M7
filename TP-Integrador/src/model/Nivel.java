@@ -20,6 +20,7 @@ public final class Nivel {
 	private final int cantidadCeldas;
 	private final List<Integer> numeros;
 	private final int puntos;
+	private final Celda inicio;
 
 	public Nivel(int tamano, List<Integer> numeros) {
 		Objects.requireNonNull(numeros, NUMEROS_NULOS);
@@ -28,6 +29,8 @@ public final class Nivel {
 		this.cantidadCeldas = tamano * tamano;
 		this.numeros = List.copyOf(numeros);
 		this.puntos = validarNumeros(this.numeros, cantidadCeldas);
+		int indiceInicio = this.numeros.indexOf(1);
+		this.inicio = new Celda(indiceInicio / tamano, indiceInicio % tamano);
 	}
 
 	public int numeroEn(Celda celda) {
@@ -44,8 +47,7 @@ public final class Nivel {
 	}
 
 	public Celda inicio() {
-		int indice = numeros.indexOf(1);
-		return new Celda(indice / tamano, indice % tamano);
+		return inicio;
 	}
 
 	public int tamano() {

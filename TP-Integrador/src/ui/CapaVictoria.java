@@ -20,15 +20,17 @@ import javax.swing.SwingUtilities;
 final class CapaVictoria extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private static final int ANCHO_TARJETA = 420;
-	private static final int ALTO_TARJETA = 280;
+	private static final int ALTO_TARJETA = 300;
 	private static final float TRANSPARENCIA = 0.35f;
 	private static final String TEXTO_REVANCHA = "Jugar de nuevo";
 	private static final String TEXTO_ESPERANDO = "Esperando rival...";
+	private static final String TEXTO_GENERANDO = "Generando...";
 
 	private final JLabel titulo = etiqueta("¡Completado!", Font.BOLD, Tema.TAMANO_TITULO, "victoria");
 	private final JLabel detalle = etiqueta("", Font.PLAIN, Tema.TAMANO_SUBTITULO, "victoria-detalle");
 	private final JButton jugarNuevamente = Tema.boton(TEXTO_REVANCHA, true);
 	private final JButton menu = Tema.boton("Volver al menú", false);
+	private boolean multijugador;
 
 	CapaVictoria(Runnable jugarOtraVez, Runnable volverAlMenu) {
 		super(new GridBagLayout());
@@ -46,15 +48,16 @@ final class CapaVictoria extends JPanel {
 		add(tarjeta(jugarOtraVez, volverAlMenu));
 	}
 
-	void mostrarFinPartida(String tituloTexto, String detalleTexto) {
-		boolean reciénAbierta = !isVisible();
-		if (reciénAbierta) {
+	void mostrarFinPartida(String tituloTexto, String detalleHtml, boolean multijugador) {
+		boolean recienAbierta = !isVisible();
+		this.multijugador = multijugador;
+		if (recienAbierta) {
 			reiniciarBotonRevancha();
 		}
 		titulo.setText(tituloTexto);
-		detalle.setText(detalleTexto);
+		detalle.setText("<html><div style='text-align:center;width:340px;'>" + detalleHtml + "</div></html>");
 		setVisible(true);
-		if (reciénAbierta) {
+		if (recienAbierta) {
 			SwingUtilities.invokeLater(jugarNuevamente::requestFocusInWindow);
 		}
 	}
@@ -86,7 +89,7 @@ final class CapaVictoria extends JPanel {
 		menu.setName("menu-victoria");
 		jugarNuevamente.addActionListener(e -> {
 			jugarNuevamente.setEnabled(false);
-			jugarNuevamente.setText(TEXTO_ESPERANDO);
+			jugarNuevamente.setText(multijugador ? TEXTO_ESPERANDO : TEXTO_GENERANDO);
 			jugarOtraVez.run();
 		});
 		menu.addActionListener(e -> {

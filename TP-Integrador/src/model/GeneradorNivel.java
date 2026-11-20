@@ -115,7 +115,7 @@ public final class GeneradorNivel {
 		}
 
 		void completarHastaUnica() {
-			while (!esUnica()) {
+			while (!Thread.currentThread().isInterrupted() && !esUnica()) {
 				Optional<int[]> alternativa = solucionador.alternativa();
 				List<Integer> candidatos = sinPista(alternativa.orElse(null));
 				pasos.add(elegir(candidatos.isEmpty() ? sinPista(null) : candidatos));
@@ -126,6 +126,9 @@ public final class GeneradorNivel {
 			List<Integer> orden = new ArrayList<>(pasos.subSet(1, camino.length - 1));
 			Collections.shuffle(orden, azar);
 			for (int paso : orden) {
+				if (Thread.currentThread().isInterrupted()) {
+					return;
+				}
 				intentarQuitar(paso, piso);
 			}
 		}
