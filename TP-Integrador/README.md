@@ -61,7 +61,6 @@ TP-Integrador/
 │   ├── build.sh                   # Compiles src/ with --release 17 -Xlint:all into build/app.jar
 │   ├── health-check.sh            # Checks java, javac, and jar availability
 │   ├── run.sh                     # Builds and launches Main
-│   └── test.sh                    # Compiles and executes the dependency-free test suite
 ├── src/
 │   ├── controller/
 │   │   ├── ActualizacionVista.java # Immutable UI view-state snapshot
@@ -95,8 +94,6 @@ TP-Integrador/
 │   ├── utils/
 │   │   └── Constantes.java        # Network, timer, and round defaults
 │   └── Main.java                  # Application entry point
-├── test/
-│   └── PruebasZip.java            # Automated model, generator, bus, engine, and TCP tests
 ├── .editorconfig                  # Formatting rules across IDEs
 ├── .gitattributes                 # Line-ending normalization
 ├── .gitignore                     # Ignored build artifacts
