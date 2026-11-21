@@ -174,7 +174,7 @@ final class PanelJuego extends JPanel {
 		jugando = !act.partidaFinalizada() && !estadoJuego.gano();
 		tablero.mostrar(estadoJuego, act.manchadoPorTomate());
 		celdas.setText("Celdas: " + estadoJuego.visitadas() + "/" + estadoJuego.nivel().cantidadCeldas());
-		siguiente.setText("Próximo: " + textoSiguiente(act, estadoJuego));
+		siguiente.setText(textoMarcador(act));
 		progreso.setValue((int) Math.round(PROGRESO_MAXIMO
 				* (double) estadoJuego.visitadas() / estadoJuego.nivel().cantidadCeldas()));
 		boolean puedeRetroceder = jugando && estadoJuego.visitadas() > 1;
@@ -185,18 +185,11 @@ final class PanelJuego extends JPanel {
 		estadoMensaje.setText(act.mensaje());
 	}
 
-	private String textoSiguiente(ActualizacionVista act, EstadoJuego estadoJuego) {
-		String texto = estadoJuego.gano() ? "Completado" : Integer.toString(estadoJuego.proximoNumero());
-		if (act.rondasObjetivo() > 1) {
-			if (act.multijugador()) {
-				texto += " · Vos " + act.rondasLocal() + " - " + act.rondasRival()
-						+ " Rival (a " + act.rondasObjetivo() + ")";
-			} else {
-				texto += " · Ronda " + Math.min(act.rondasLocal() + 1, act.rondasObjetivo())
-						+ "/" + act.rondasObjetivo();
-			}
-		}
-		return texto;
+	private String textoMarcador(ActualizacionVista act) {
+		return act.multijugador()
+				? "Vos " + act.rondasLocal() + "/" + act.rondasObjetivo()
+						+ " · Mejor rival " + act.rondasRival() + "/" + act.rondasObjetivo()
+				: "Ronda " + Math.min(act.rondasLocal() + 1, act.rondasObjetivo()) + "/" + act.rondasObjetivo();
 	}
 
 	void enfocarEntrada() {

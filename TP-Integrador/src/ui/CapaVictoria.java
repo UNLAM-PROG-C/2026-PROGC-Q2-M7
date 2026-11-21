@@ -55,7 +55,7 @@ final class CapaVictoria extends JPanel {
 			reiniciarBotonRevancha();
 		}
 		titulo.setText(tituloTexto);
-		detalle.setText("<html><div style='text-align:center;width:340px;'>" + detalleHtml + "</div></html>");
+		detalle.setText("<html><center>" + detalleHtml + "</center></html>");
 		setVisible(true);
 		if (recienAbierta) {
 			SwingUtilities.invokeLater(jugarNuevamente::requestFocusInWindow);
