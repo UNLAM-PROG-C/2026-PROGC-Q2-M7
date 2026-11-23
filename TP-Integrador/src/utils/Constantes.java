@@ -13,7 +13,6 @@ public final class Constantes {
 	public static final int JUGADORES_RED_POR_DEFECTO = 2;
 
 	// Constantes del motor
-	public static final int HILOS_TIMER = 1;
 	public static final int SEGUNDOS_TOMATE = 4;
 
 	// Constantes de rondas

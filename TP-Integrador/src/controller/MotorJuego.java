@@ -3,10 +3,7 @@ package controller;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -32,16 +29,10 @@ public class MotorJuego {
 	private final int rol;
 	private final EventBus bus;
 	private final GestorRed red;
-	private final ScheduledExecutorService timer = Executors.newScheduledThreadPool(
-			Constantes.HILOS_TIMER, tarea -> {
-				Thread hilo = new Thread(tarea, "Thread-Timer-Tomate");
-				hilo.setDaemon(true);
-				return hilo;
-			});
 	private final Consumer<ActualizacionVista> vista;
 	private final Set<Integer> revanchasClientes = new HashSet<>();
 	private Thread hiloConsumidor;
-	private ScheduledFuture<?> tareaTomate;
+	private int generacionTomate;
 	private TableroZip tablero;
 	private GeneradorNivel generador;
 	private Dificultad dificultadActual;
@@ -122,7 +113,7 @@ public class MotorJuego {
 			case DESHACER -> procesarDeshacer();
 			case REINICIAR -> procesarReiniciar();
 			case GRILLA_COMPLETA -> procesarGrillaCompleta();
-			case LIMPIAR_TOMATE -> procesarLimpiarTomate();
+			case LIMPIAR_TOMATE -> procesarLimpiarTomate(event.payload());
 			default -> despacharEventoRed(event);
 		}
 	}
@@ -335,27 +326,14 @@ public class MotorJuego {
 	}
 
 	private void programarLimpiezaTomate() {
-		cancelarTomate();
-		if (timer.isShutdown() || Thread.currentThread().isInterrupted()) {
-			return;
-		}
-		try {
-			tareaTomate = timer.schedule(
-					() -> bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE)),
-					Constantes.SEGUNDOS_TOMATE,
-					TimeUnit.SECONDS);
-		} catch (RejectedExecutionException e) {
-			if (!timer.isShutdown()) {
-				throw e;
-			}
-		}
+		int id = ++generacionTomate;
+		CompletableFuture.runAsync(
+				() -> bus.publicar(new Evento(TipoEvento.LIMPIAR_TOMATE, id)),
+				CompletableFuture.delayedExecutor(Constantes.SEGUNDOS_TOMATE, TimeUnit.SECONDS));
 	}
 
 	private void cancelarTomate() {
-		if (tareaTomate != null) {
-			tareaTomate.cancel(false);
-			tareaTomate = null;
-		}
+		generacionTomate++;
 	}
 
 	private void actualizarRondasRival(Object payload) {
@@ -371,11 +349,15 @@ public class MotorJuego {
 		}
 	}
 
-	private void procesarLimpiarTomate() {
-		if (!partidaFinalizada && manchadoPorTomate) {
-			manchadoPorTomate = false;
-			notificarVista("Se limpió el tomate. ¡Seguí jugando!");
+	private void procesarLimpiarTomate(Object payload) {
+		if (partidaFinalizada || !manchadoPorTomate) {
+			return;
 		}
+		if (payload instanceof Integer id && id != generacionTomate) {
+			return;
+		}
+		manchadoPorTomate = false;
+		notificarVista("Se limpió el tomate. ¡Seguí jugando!");
 	}
 
 	private void procesarPartidaFinalizada() {
@@ -425,11 +407,9 @@ public class MotorJuego {
 	}
 
 	public void finalizar() {
-		cancelarTomate();
 		if (hiloConsumidor != null) {
 			hiloConsumidor.interrupt();
 		}
-		timer.shutdownNow();
 		if (red != null) {
 			red.cerrar();
 		}
