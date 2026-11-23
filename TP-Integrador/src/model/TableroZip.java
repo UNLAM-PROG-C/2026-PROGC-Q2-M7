@@ -23,7 +23,7 @@ public final class TableroZip {
 	}
 
 	public EstadoJuego estadoJuego() {
-		return EstadoJuego.desdeTablero(nivel, recorrido, proximoNumero);
+		return new EstadoJuego(nivel, recorrido, proximoNumero);
 	}
 
 	public ResultadoMovimiento mover(Direccion direccion) {
@@ -32,7 +32,7 @@ public final class TableroZip {
 			return ResultadoMovimiento.FINALIZADO;
 		}
 		Celda siguiente = recorrido.get(recorrido.size() - 1).mover(direccion);
-		ResultadoMovimiento resultado = ReglasJuego.evaluar(nivel, recorrido, siguiente);
+		ResultadoMovimiento resultado = evaluar(siguiente);
 		if (resultado == ResultadoMovimiento.VALIDO || resultado == ResultadoMovimiento.FINALIZADO) {
 			recorrido.add(siguiente);
 			if (nivel.numeroEn(siguiente) > 0) {
@@ -40,6 +40,24 @@ public final class TableroZip {
 			}
 		}
 		return resultado;
+	}
+
+	private ResultadoMovimiento evaluar(Celda destino) {
+		if (!nivel.contiene(destino)) {
+			return ResultadoMovimiento.FUERA_DEL_TABLERO;
+		}
+		if (recorrido.contains(destino)) {
+			return ResultadoMovimiento.CELDA_REPETIDA;
+		}
+		int numero = nivel.numeroEn(destino);
+		if (numero > 0 && numero != proximoNumero) {
+			return ResultadoMovimiento.FUERA_DE_ORDEN;
+		}
+		if (numero == nivel.puntos()) {
+			return recorrido.size() == nivel.cantidadCeldas() - 1
+					? ResultadoMovimiento.FINALIZADO : ResultadoMovimiento.FINAL_ANTICIPADO;
+		}
+		return ResultadoMovimiento.VALIDO;
 	}
 
 	/**

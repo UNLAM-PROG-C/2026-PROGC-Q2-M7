@@ -77,7 +77,6 @@ TP-Integrador/
 │   │   ├── EstadoJuego.java       # Immutable board state snapshot
 │   │   ├── GeneradorNivel.java    # Backbite Hamiltonian generator with unique-solution minimization
 │   │   ├── Nivel.java             # Immutable puzzle definition
-│   │   ├── ReglasJuego.java       # Movement and path validation rules
 │   │   ├── ResultadoMovimiento.java # Move evaluation outcomes and user messages
 │   │   ├── SolucionadorZip.java   # Backtracking solver with pruning and interruption support
 │   │   └── TableroZip.java        # Stateful board progression and undo/rewind logic

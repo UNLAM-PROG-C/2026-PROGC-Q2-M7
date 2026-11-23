@@ -43,23 +43,6 @@ public class MotorJuego {
 	private int rondasGanadasRival;
 	private boolean partidaFinalizada;
 
-	public MotorJuego(int rol, EventBus bus) {
-		this(rol, bus, null);
-	}
-
-	public MotorJuego(int rol, EventBus bus, Consumer<ActualizacionVista> vista) {
-		this(rol, Constantes.IP_LOCAL, Constantes.PUERTO, Constantes.RONDAS_POR_DEFECTO, bus, vista);
-	}
-
-	public MotorJuego(int rol, String host, int puerto, EventBus bus, Consumer<ActualizacionVista> vista) {
-		this(rol, host, puerto, Constantes.RONDAS_POR_DEFECTO, bus, vista);
-	}
-
-	public MotorJuego(int rol, String host, int puerto, int rondasObjetivo, EventBus bus,
-			Consumer<ActualizacionVista> vista) {
-		this(rol, host, puerto, rondasObjetivo, Constantes.JUGADORES_RED_POR_DEFECTO, bus, vista);
-	}
-
 	public MotorJuego(int rol, String host, int puerto, int rondasObjetivo, int jugadores,
 			EventBus bus, Consumer<ActualizacionVista> vista) {
 		this.rol = rol;
@@ -112,7 +95,6 @@ public class MotorJuego {
 			case IR_A_CELDA -> procesarIrACelda(event.payload());
 			case DESHACER -> procesarDeshacer();
 			case REINICIAR -> procesarReiniciar();
-			case GRILLA_COMPLETA -> procesarGrillaCompleta();
 			case LIMPIAR_TOMATE -> procesarLimpiarTomate(event.payload());
 			default -> despacharEventoRed(event);
 		}
