@@ -10,10 +10,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import events.EventBus;
 import events.Evento;
@@ -29,10 +28,9 @@ public class GestorRed {
 	private final String host;
 	private final EventBus bus;
 	private final Object lockEstado = new Object();
-	private final Map<Integer, Conexion> conexiones = new ConcurrentHashMap<>();
-	private final AtomicBoolean cerrado = new AtomicBoolean();
+	private final Map<Integer, Conexion> conexiones = new HashMap<>();
 	private int siguienteId = 1;
-	private boolean conectado, listo;
+	private boolean cerrado, listo;
 	private Closeable pendiente;
 
 	public GestorRed(int rol, String host, int puerto, int clientesEsperados, EventBus bus) {
@@ -44,12 +42,6 @@ public class GestorRed {
 	}
 
 	public void conectar() throws IOException {
-		synchronized (lockEstado) {
-			if (conectado) {
-				return;
-			}
-			conectado = true;
-		}
 		if (rol == Constantes.ROL_HOST) {
 			esperarClientes();
 		} else {
@@ -58,7 +50,15 @@ public class GestorRed {
 	}
 
 	public int clientesConectados() {
-		return conexiones.size();
+		synchronized (lockEstado) {
+			return conexiones.size();
+		}
+	}
+
+	private boolean estaCerrado() {
+		synchronized (lockEstado) {
+			return cerrado;
+		}
 	}
 
 	private void esperarClientes() throws IOException {
@@ -72,7 +72,7 @@ public class GestorRed {
 			}
 		} catch (IOException e) {
 			cerrarConexionesActivas();
-			throw cerrado.get() ? new IOException("Espera de host cancelada.", e) : e;
+			throw estaCerrado() ? new IOException("Espera de host cancelada.", e) : e;
 		} finally {
 			limpiarPendiente(server);
 			cerrarRecurso(server);
@@ -81,7 +81,7 @@ public class GestorRed {
 
 	private boolean cupoCompleto() throws IOException {
 		synchronized (lockEstado) {
-			if (cerrado.get()) {
+			if (cerrado) {
 				throw new IOException("Espera de host cancelada.");
 			}
 			listo = conexiones.size() >= clientesEsperados;
@@ -100,13 +100,13 @@ public class GestorRed {
 		} catch (IOException e) {
 			limpiarPendiente(cliente);
 			cerrarRecurso(cliente);
-			throw cerrado.get() ? new IOException("Conexión cancelada.", e) : e;
+			throw estaCerrado() ? new IOException("Conexión cancelada.", e) : e;
 		}
 	}
 
 	private void registrarPendiente(Closeable recurso) throws IOException {
 		synchronized (lockEstado) {
-			if (!cerrado.get()) {
+			if (!cerrado) {
 				pendiente = recurso;
 				return;
 			}
@@ -127,7 +127,7 @@ public class GestorRed {
 		PrintWriter salida = new PrintWriter(socket.getOutputStream(), true, StandardCharsets.UTF_8);
 		int id;
 		synchronized (lockEstado) {
-			if (cerrado.get()) {
+			if (cerrado) {
 				id = -1;
 			} else {
 				id = siguienteId++;
@@ -151,11 +151,11 @@ public class GestorRed {
 		try (BufferedReader entrada = new BufferedReader(
 				new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
 			String linea;
-			while (!cerrado.get() && (linea = entrada.readLine()) != null) {
+			while (!estaCerrado() && (linea = entrada.readLine()) != null) {
 				procesarLinea(id, linea);
 			}
 		} catch (IOException e) {
-			if (!cerrado.get()) {
+			if (!estaCerrado()) {
 				System.err.println("[RED] Conexión " + id + " finalizada: " + e.getMessage());
 			}
 		} finally {
@@ -171,9 +171,7 @@ public class GestorRed {
 		TipoEvento tipo = evento.tipo();
 		if (rol == Constantes.ROL_HOST
 				&& (tipo == TipoEvento.RIVAL_COMPLETO_GRILLA || tipo == TipoEvento.PARTIDA_FINALIZADA)) {
-			conexiones.forEach((id, con) -> {
-				if (id != idOrigen) { con.salida().println(linea); }
-			});
+			salidasDestino(idOrigen).forEach(salida -> salida.println(linea));
 		}
 		bus.publicar(tipo == TipoEvento.SOLICITAR_REVANCHA
 				? new Evento(TipoEvento.SOLICITAR_REVANCHA, idOrigen) : evento);
@@ -184,11 +182,26 @@ public class GestorRed {
 	}
 
 	public void enviarEvento(TipoEvento tipo, Object datos) {
-		if (tipo == null || cerrado.get()) {
+		if (tipo == null || estaCerrado()) {
 			return;
 		}
 		String linea = new Evento(tipo, datos).aLineaRed();
-		conexiones.values().forEach(con -> con.salida().println(linea));
+		salidasDestino(-1).forEach(salida -> salida.println(linea));
+	}
+
+	private List<PrintWriter> salidasDestino(int excluirId) {
+		synchronized (lockEstado) {
+			if (cerrado) {
+				return List.of();
+			}
+			List<PrintWriter> salidas = new ArrayList<>(conexiones.size());
+			conexiones.forEach((id, con) -> {
+				if (id != excluirId) {
+					salidas.add(con.salida());
+				}
+			});
+			return salidas;
+		}
 	}
 
 	private void desconectar(int id, Socket socket) {
@@ -196,7 +209,7 @@ public class GestorRed {
 		boolean sinClientes;
 		synchronized (lockEstado) {
 			conexiones.remove(id);
-			notificar = !cerrado.get() && listo;
+			notificar = !cerrado && listo;
 			sinClientes = conexiones.isEmpty();
 		}
 		cerrarRecurso(socket);
@@ -210,9 +223,10 @@ public class GestorRed {
 	public void cerrar() {
 		Closeable porCerrar;
 		synchronized (lockEstado) {
-			if (!cerrado.compareAndSet(false, true)) {
+			if (cerrado) {
 				return;
 			}
+			cerrado = true;
 			porCerrar = pendiente;
 			pendiente = null;
 		}

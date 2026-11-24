@@ -17,8 +17,4 @@ public record ActualizacionVista(
 	public ActualizacionVista {
 		Objects.requireNonNull(mensaje, "mensaje");
 	}
-
-	public ActualizacionVista(EstadoJuego estadoJuego, String mensaje, boolean manchadoPorTomate) {
-		this(estadoJuego, mensaje, manchadoPorTomate, 0, 0, 1, false, false, false);
-	}
 }
